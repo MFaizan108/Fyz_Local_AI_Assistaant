@@ -4,6 +4,7 @@ from core.action_executor.dispatch import handle_utterance
 from core.brain.context import ConversationContext
 from voice.recorder import record_until_enter
 from voice.stt import transcribe
+from voice.tts import speak
 
 # Windows consoles default to a legacy codepage (e.g. cp1252) that can't
 # encode emoji or Urdu script, which Fyz's replies will routinely contain.
@@ -28,7 +29,9 @@ def main() -> None:
 
         text = transcribe(audio).strip()
         if not text:
-            print("Fyz: Kuch sunai nahi diya, dobara try karo.")
+            reply = "Kuch sunai nahi diya, dobara try karo."
+            print(f"Fyz: {reply}")
+            speak(reply)
             continue
 
         print(f"You (heard): {text}")
@@ -37,6 +40,7 @@ def main() -> None:
 
         reply = handle_utterance(text, context)
         print(f"Fyz: {reply}")
+        speak(reply)
 
 
 if __name__ == "__main__":
