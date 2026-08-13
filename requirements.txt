@@ -4,3 +4,7 @@ pydantic
 pytest
 psutil
 Pillow
+sounddevice
+numpy
+soundfile
+faster-whisper
