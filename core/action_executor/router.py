@@ -6,6 +6,7 @@ from typing import Callable, Optional, Tuple
 from core.brain.context import ConversationContext
 from core.brain.schemas import Intent
 from core.permissions.levels import PermissionLevel
+from core.self_improve.sandbox import SandboxError, cleanup_experiment, merge_experiment, propose_change
 from memory.long_term import MemoryCategory, list_memories, save_memory, semantic_search_memories
 from tools.app_control.apps import open_app, open_path_in_vscode
 from tools.file_manager.files import delete_file, read_file, search_files
@@ -19,11 +20,14 @@ _PRONOUN_WORDS = {
     "iska", "iski", "isko", "iske", "uska", "uski", "usko", "ye", "yeh",
     "woh", "wo", "is", "it", "this", "that",
 }
+_YES_WORDS = {"y", "yes", "haan", "han", "ji", "ji haan"}
+
+ConfirmPrompt = Callable[[str], str]
 
 
 @dataclass
 class ToolEntry:
-    func: Callable[[Intent, Optional[ConversationContext]], str]
+    func: Callable[[Intent, Optional[ConversationContext], ConfirmPrompt], str]
     level: PermissionLevel
     description: str
 
@@ -50,13 +54,13 @@ def _resolve_project(
     return project, hint
 
 
-def _handle_open_app(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_open_app(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     if not intent.target:
         return "Which app should I open?"
     return open_app(intent.target)
 
 
-def _handle_open_project(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_open_project(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     project, hint = _resolve_project(intent.target, context)
     if not hint:
         return "Which project do you mean?"
@@ -70,7 +74,7 @@ def _handle_open_project(intent: Intent, context: Optional[ConversationContext])
     return f"Opening {project.name} in VS Code."
 
 
-def _handle_git_status(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_git_status(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     project, hint = _resolve_project(intent.target, context)
     if not hint:
         return "Which project's git status do you want?"
@@ -83,7 +87,7 @@ def _handle_git_status(intent: Intent, context: Optional[ConversationContext]) -
     return git_status(project.path)
 
 
-def _handle_run_tests(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_run_tests(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     project, hint = _resolve_project(intent.target, context)
     if not hint:
         return "Which project should I run tests in?"
@@ -96,15 +100,15 @@ def _handle_run_tests(intent: Intent, context: Optional[ConversationContext]) ->
     return run_tests(project.path)
 
 
-def _handle_get_system_info(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_get_system_info(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     return get_system_info()
 
 
-def _handle_take_screenshot(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_take_screenshot(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     return take_screenshot()
 
 
-def _handle_remember(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_remember(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     if not intent.target:
         return "Kya yaad rakhna hai, bata do."
 
@@ -118,7 +122,7 @@ def _handle_remember(intent: Intent, context: Optional[ConversationContext]) -> 
     return f"Yaad rakh liya ({category.value}): {intent.target}"
 
 
-def _handle_recall(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_recall(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     if intent.target:
         memories = semantic_search_memories(intent.target, top_k=5)
     else:
@@ -131,7 +135,7 @@ def _handle_recall(intent: Intent, context: Optional[ConversationContext]) -> st
     return "Yeh yaad hai:\n" + "\n".join(lines)
 
 
-def _handle_search_files(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_search_files(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     if not intent.target:
         return "What file are you looking for?"
 
@@ -143,7 +147,7 @@ def _handle_search_files(intent: Intent, context: Optional[ConversationContext])
     return "Found:\n" + "\n".join(results)
 
 
-def _handle_read_file(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_read_file(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     if not intent.target:
         return "Which file should I read?"
 
@@ -157,7 +161,7 @@ def _handle_read_file(intent: Intent, context: Optional[ConversationContext]) ->
     return read_file(target)
 
 
-def _handle_delete_file(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_delete_file(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     if not intent.target:
         return "Which file should I delete?"
 
@@ -167,14 +171,62 @@ def _handle_delete_file(intent: Intent, context: Optional[ConversationContext]) 
     return delete_file(intent.target)
 
 
-def _handle_list_processes(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_list_processes(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     return list_processes()
 
 
-def _handle_kill_process(intent: Intent, context: Optional[ConversationContext]) -> str:
+def _handle_kill_process(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     if not intent.target:
         return "Which process should I kill?"
     return kill_process(intent.target)
+
+
+def _handle_propose_improvement(
+    intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt
+) -> str:
+    """The self-improvement loop end-to-end, gated twice: dispatch's outer
+    DANGEROUS gate gets this handler called at all, then this handler asks
+    a SECOND time (via the same confirm_prompt) before merging anything
+    into the real codebase - a diff and test results are shown first."""
+    params = intent.params or {}
+    target_file = params.get("file")
+
+    if not intent.target:
+        return "Kya improve karna hai, bata do."
+    if not target_file:
+        return "Mujhe exact file path chahiye (Fyz project ke andar, relative) improve karne ke liye."
+
+    try:
+        experiment = propose_change(target_file, intent.target)
+    except SandboxError as e:
+        return str(e)
+
+    summary = (
+        f"Experiment branch '{experiment.branch}' bana diya.\n\n"
+        f"Diff:\n{experiment.diff or '(no changes produced)'}\n\n"
+        f"Tests {'PASSED' if experiment.tests_passed else 'FAILED'}:\n{experiment.test_output}\n"
+    )
+
+    if not experiment.diff.strip():
+        cleanup_experiment(experiment)
+        return summary + "\nKoi change nahi bana, cleanup kar diya."
+
+    if not experiment.tests_passed:
+        answer = confirm_prompt(
+            summary + "\nTests fail ho rahe hain - phir bhi review ke liye experiment rakhna hai? [y/n] "
+        )
+        if answer.strip().lower() not in _YES_WORDS:
+            cleanup_experiment(experiment)
+            return "Theek hai, experiment discard kar diya."
+        return summary + f"\nExperiment '{experiment.branch}' rakha hua hai lekin merge nahi kiya - tests fail ho rahe the."
+
+    answer = confirm_prompt(summary + "\nMerge kar doon? Type 'confirm' to merge: ")
+    if answer.strip().lower() == "confirm":
+        merge_result = merge_experiment(experiment)
+        return summary + "\n" + merge_result
+
+    cleanup_experiment(experiment)
+    return summary + "\nTheek hai, merge nahi kiya - experiment discard kar diya."
 
 
 TOOL_REGISTRY: dict[str, ToolEntry] = {
@@ -191,10 +243,19 @@ TOOL_REGISTRY: dict[str, ToolEntry] = {
     "kill_process": ToolEntry(_handle_kill_process, PermissionLevel.DANGEROUS, "Force-kill a running process"),
     "git_status": ToolEntry(_handle_git_status, PermissionLevel.SAFE, "Show git status for a project"),
     "run_tests": ToolEntry(_handle_run_tests, PermissionLevel.SAFE, "Run a project's test suite"),
+    "propose_improvement": ToolEntry(
+        _handle_propose_improvement,
+        PermissionLevel.DANGEROUS,
+        "Propose and test a code change to Fyz's own codebase in an isolated branch",
+    ),
 }
 
 
-def route(intent: Intent, context: Optional[ConversationContext] = None) -> Optional[str]:
+def route(
+    intent: Intent,
+    context: Optional[ConversationContext] = None,
+    confirm_prompt: ConfirmPrompt = input,
+) -> Optional[str]:
     """Execute the tool for an intent. Returns None for 'chat' (caller should
     fall through to conversation handling)."""
     if intent.intent == "chat":
@@ -204,7 +265,7 @@ def route(intent: Intent, context: Optional[ConversationContext] = None) -> Opti
     if entry is None:
         return f"I don't have a tool for '{intent.intent}' yet."
 
-    return entry.func(intent, context)
+    return entry.func(intent, context, confirm_prompt)
 
 
 def get_permission_level(intent_name: str) -> Optional[PermissionLevel]:

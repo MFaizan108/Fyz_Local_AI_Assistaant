@@ -33,6 +33,11 @@ e.g. "chrome.exe", or a PID) - this is destructive
 to mean the project just discussed)
 - run_tests: user wants to run the test suite for one of their projects (target = project hint, or \
 null to mean the project just discussed)
+- propose_improvement: user wants Fyz to change/improve/fix ITS OWN code (not another project) - \
+target = a short description of what to change, params must include "file" = the path of the file \
+to change, relative to the Fyz project root (e.g. "tools/file_manager/files.py"). This never \
+directly edits anything - it only proposes a change in an isolated experiment for review, so use it \
+whenever the user asks Fyz to modify, fix, or improve part of its own source code.
 - chat: user is just having a normal conversation, asking a question, or the message isn't a command
 
 If the message is in Urdu, Roman Urdu, or mixed Urdu/English, still classify it correctly - do \
@@ -96,4 +101,7 @@ User: "healthcare project ka git status batao"
 
 User: "iske tests chalao"
 {"intent": "run_tests", "target": "it", "params": {}}
+
+User: "tools/file_manager/files.py mein error handling improve karo"
+{"intent": "propose_improvement", "target": "improve error handling", "params": {"file": "tools/file_manager/files.py"}}
 """

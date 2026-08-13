@@ -42,19 +42,19 @@ def handle_utterance(
             f"Pakka karna hai? Type '{_DANGEROUS_CONFIRM_PHRASE}' to proceed: "
         )
         if answer.strip().lower() == _DANGEROUS_CONFIRM_PHRASE:
-            reply = route(intent, context) or "(no result)"
+            reply = route(intent, context, confirm_prompt) or "(no result)"
         else:
             reply = "Theek hai, cancel kar diya - yeh dangerous tha."
             executed = False
     elif level == PermissionLevel.CONFIRM:
         answer = confirm_prompt(f"Fyz: Confirm karoon? ({intent.intent}: {intent.target}) [y/n] ")
         if answer.strip().lower() in _YES_WORDS:
-            reply = route(intent, context) or "(no result)"
+            reply = route(intent, context, confirm_prompt) or "(no result)"
         else:
             reply = "Theek hai, nahi karta."
             executed = False
     else:
-        reply = route(intent, context) or "(no result)"
+        reply = route(intent, context, confirm_prompt) or "(no result)"
 
     log_action(
         intent=intent.intent,

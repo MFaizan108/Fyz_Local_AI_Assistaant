@@ -4,12 +4,12 @@ from core.brain.context import ConversationContext
 from core.brain.schemas import Intent
 from core.permissions.levels import PermissionLevel
 
-# No real DANGEROUS-tier tool exists in the router yet (nothing destructive
-# has been built), so this injects a fake one for the duration of the test
-# to exercise the gate that will matter once Phase 10 adds one.
+# Uses a fake injected DANGEROUS tool rather than a real one (delete_file,
+# kill_process, propose_improvement) so this test stays fast and has no
+# side effects of its own.
 
 
-def _fake_dangerous_handler(intent, context):
+def _fake_dangerous_handler(intent, context, confirm_prompt):
     return "danger executed"
 
 
