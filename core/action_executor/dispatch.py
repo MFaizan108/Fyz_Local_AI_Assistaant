@@ -4,6 +4,7 @@ from core.action_executor.router import get_permission_level, route
 from core.brain.brain import get_intent
 from core.brain.context import ConversationContext
 from core.brain.conversation import get_chat_reply
+from core.brain.normalize import normalize_text
 from core.permissions.levels import PermissionLevel
 
 _YES_WORDS = {"y", "yes", "haan", "han", "ji", "ji haan"}
@@ -17,6 +18,7 @@ def handle_utterance(
     """Run one user utterance through intent parsing, then either the chat
     persona or the tool router (with a y/n gate for CONFIRM-tier tools),
     updating context either way. Shared by the text and voice entrypoints."""
+    text = normalize_text(text)
     intent = get_intent(text, context)
 
     if intent.intent == "chat":
