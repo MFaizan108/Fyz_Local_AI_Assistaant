@@ -18,9 +18,10 @@ from PySide6.QtWidgets import (
 from core.brain.context import ConversationContext
 from memory.action_log import recent_actions
 from ui.confirm_bridge import ConfirmBridge
-from ui.worker import TranscribeWorker, UtteranceWorker
+from ui.worker import ContinuousListenWorker, TranscribeWorker, UtteranceWorker
 from voice.recorder import Recorder
 from voice.tts import speak
+from voice.vad_listener import ContinuousListener, is_exit_phrase
 
 
 class MainWindow(QMainWindow):
@@ -35,6 +36,10 @@ class MainWindow(QMainWindow):
         self.is_recording = False
         self.worker: Optional[UtteranceWorker] = None
         self.transcribe_worker: Optional[TranscribeWorker] = None
+
+        self.continuous_listener = ContinuousListener()
+        self.listen_worker: Optional[ContinuousListenWorker] = None
+        self.always_listening = False
 
         central = QWidget()
         layout = QVBoxLayout(central)
@@ -58,14 +63,24 @@ class MainWindow(QMainWindow):
 
         self.mic_button = QPushButton("\U0001F3A4")
         self.mic_button.setFixedWidth(40)
+        self.mic_button.setToolTip("Click to start always-listening mode (Jarvis-style)")
         self.mic_button.clicked.connect(self._on_mic_clicked)
         input_row.addWidget(self.mic_button)
 
         layout.addLayout(input_row)
 
+        options_row = QHBoxLayout()
         self.speak_checkbox = QCheckBox("Speak replies")
         self.speak_checkbox.setChecked(True)
-        layout.addWidget(self.speak_checkbox)
+        options_row.addWidget(self.speak_checkbox)
+
+        self.push_to_talk_checkbox = QCheckBox("Push-to-talk (instead of always-listening)")
+        self.push_to_talk_checkbox.setToolTip(
+            "Fallback mode: click mic to start recording, click again to stop - "
+            "use this if always-listening mode is too sensitive/insensitive for your mic."
+        )
+        options_row.addWidget(self.push_to_talk_checkbox)
+        layout.addLayout(options_row)
 
         layout.addWidget(QLabel("Recent Activity"))
         self.activity_list = QListWidget()
@@ -80,7 +95,8 @@ class MainWindow(QMainWindow):
     def _set_busy(self, busy: bool, status: str = "") -> None:
         self.input_box.setEnabled(not busy)
         self.send_button.setEnabled(not busy)
-        self.mic_button.setEnabled(not busy)
+        if not self.always_listening:
+            self.mic_button.setEnabled(not busy)
         self.status_label.setText(status or ("● Thinking..." if busy else "● Idle"))
 
     def _on_send(self) -> None:
@@ -104,8 +120,17 @@ class MainWindow(QMainWindow):
         self._refresh_activity()
         if self.speak_checkbox.isChecked():
             speak(reply)
+        if self.always_listening and self.listen_worker is not None:
+            self.status_label.setText("● Hamesha sun raha hoon...")
+            self.listen_worker.resume()
 
     def _on_mic_clicked(self) -> None:
+        if self.push_to_talk_checkbox.isChecked():
+            self._on_push_to_talk_mic_clicked()
+        else:
+            self._on_always_listening_mic_clicked()
+
+    def _on_push_to_talk_mic_clicked(self) -> None:
         if not self.is_recording:
             self.recorder.start()
             self.is_recording = True
@@ -126,6 +151,38 @@ class MainWindow(QMainWindow):
         if not text:
             self._set_busy(False)
             self.status_label.setText("● Kuch sunai nahi diya")
+            return
+        self._submit(text)
+
+    def _on_always_listening_mic_clicked(self) -> None:
+        if not self.always_listening:
+            self.always_listening = True
+            self.mic_button.setText("\U0001F534")
+            self.mic_button.setToolTip("Click to stop always-listening mode")
+            self.status_label.setText("● Hamesha sun raha hoon...")
+            self.push_to_talk_checkbox.setEnabled(False)
+
+            self.listen_worker = ContinuousListenWorker(self.continuous_listener)
+            self.listen_worker.utterance_ready.connect(self._on_continuous_utterance)
+            self.listen_worker.start()
+        else:
+            self._stop_always_listening()
+
+    def _stop_always_listening(self) -> None:
+        self.always_listening = False
+        self.continuous_listener.stop()
+        if self.listen_worker is not None:
+            self.listen_worker.resume()
+        self.mic_button.setText("\U0001F3A4")
+        self.mic_button.setToolTip("Click to start always-listening mode (Jarvis-style)")
+        self.push_to_talk_checkbox.setEnabled(True)
+        self._set_busy(False)
+
+    def _on_continuous_utterance(self, text: str) -> None:
+        if is_exit_phrase(text):
+            self._append_chat("You", text)
+            self._append_chat("Fyz", "Theek hai, sunna band kar deta hoon.")
+            self._stop_always_listening()
             return
         self._submit(text)
 
