@@ -10,6 +10,12 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, coltype: str) -> None:
+    existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+
+
 def init_db() -> None:
     with get_connection() as conn:
         conn.execute(
@@ -34,6 +40,9 @@ def init_db() -> None:
             )
             """
         )
+        # Existing memories rows predate this column; migrate rather than
+        # relying on CREATE TABLE IF NOT EXISTS, which is a no-op here.
+        _ensure_column(conn, "memories", "embedding", "TEXT")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS actions_history (

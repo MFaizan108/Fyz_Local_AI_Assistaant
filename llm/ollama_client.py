@@ -2,7 +2,7 @@ from typing import List, Optional
 
 import httpx
 
-from core.config import OLLAMA_HOST, OLLAMA_MODEL
+from core.config import EMBED_MODEL, OLLAMA_HOST, OLLAMA_MODEL
 
 
 def chat(
@@ -40,3 +40,13 @@ def chat(
     )
     response.raise_for_status()
     return response.json()["message"]["content"]
+
+
+def embed(text: str, model: str = EMBED_MODEL, timeout: float = 30.0) -> List[float]:
+    response = httpx.post(
+        f"{OLLAMA_HOST}/api/embeddings",
+        json={"model": model, "prompt": text},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    return response.json()["embedding"]

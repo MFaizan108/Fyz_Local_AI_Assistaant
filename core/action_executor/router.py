@@ -6,7 +6,7 @@ from typing import Callable, Optional, Tuple
 from core.brain.context import ConversationContext
 from core.brain.schemas import Intent
 from core.permissions.levels import PermissionLevel
-from memory.long_term import MemoryCategory, save_memory, search_memories
+from memory.long_term import MemoryCategory, list_memories, save_memory, semantic_search_memories
 from tools.app_control.apps import open_app, open_path_in_vscode
 from tools.file_manager.files import delete_file, read_file, search_files
 from tools.project_tools.dev_tools import git_status, run_tests
@@ -119,7 +119,11 @@ def _handle_remember(intent: Intent, context: Optional[ConversationContext]) -> 
 
 
 def _handle_recall(intent: Intent, context: Optional[ConversationContext]) -> str:
-    memories = search_memories(intent.target or "")[:5]
+    if intent.target:
+        memories = semantic_search_memories(intent.target, top_k=5)
+    else:
+        memories = list_memories()[:5]
+
     if not memories:
         return "Mujhe is baare mein kuch yaad nahi."
 
