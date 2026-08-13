@@ -34,3 +34,16 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS actions_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                intent TEXT NOT NULL,
+                target TEXT,
+                level TEXT NOT NULL,
+                result TEXT NOT NULL,
+                executed INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
