@@ -1,14 +1,22 @@
-import time
-
-from llm.ollama_client import chat
+from core.brain.brain import get_intent
 
 
 def main() -> None:
-    print("Fyz Phase 0 milestone check: sending 'Hello' to Qwen via Ollama...")
-    start = time.perf_counter()
-    reply = chat("Hello")
-    elapsed = time.perf_counter() - start
-    print(f"Qwen replied in {elapsed:.2f}s:\n{reply}")
+    print("Fyz is listening (text mode). Type 'exit' to quit.")
+    while True:
+        try:
+            text = input("You: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not text:
+            continue
+        if text.lower() in {"exit", "quit"}:
+            break
+
+        intent = get_intent(text)
+        print(f"Fyz(intent): {intent.model_dump_json()}")
 
 
 if __name__ == "__main__":
