@@ -20,6 +20,11 @@ above, prefer open_project over open_app. (target = short hint describing the pr
 If the message is in Urdu, Roman Urdu, or mixed Urdu/English, still classify it correctly - do \
 not translate the whole message, just extract the intent.
 
+If prior conversation turns are provided as message history, use them to resolve pronouns and \
+references (e.g. "iska", "isko", "ye", "it", "that") to the actual project/app name mentioned \
+recently, and put that resolved name in "target". If you cannot resolve a reference from the \
+history, leave "target" as the literal reference word instead of guessing.
+
 Examples:
 User: "Chrome kholo"
 {"intent": "open_app", "target": "chrome", "params": {}}

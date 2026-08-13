@@ -6,3 +6,4 @@ logs/*.log
 logs/screenshots/*.png
 *.db
 .pytest_cache/
+.claude/
