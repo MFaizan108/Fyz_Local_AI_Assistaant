@@ -11,6 +11,7 @@ def chat(
     history: Optional[List[dict]] = None,
     model: str = OLLAMA_MODEL,
     timeout: float = 60.0,
+    json_mode: bool = False,
 ) -> str:
     messages = []
     if system:
@@ -19,13 +20,22 @@ def chat(
         messages.extend(history)
     messages.append({"role": "user", "content": message})
 
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+    }
+    if json_mode:
+        # Grammar-constrains the output to valid JSON. Needed because plain
+        # prompt instructions ("output raw JSON only") aren't reliable - the
+        # model would sometimes reply with confirmatory prose instead of
+        # JSON for destructive-sounding requests (e.g. delete_file), which
+        # broke intent parsing entirely for those cases.
+        payload["format"] = "json"
+
     response = httpx.post(
         f"{OLLAMA_HOST}/api/chat",
-        json={
-            "model": model,
-            "messages": messages,
-            "stream": False,
-        },
+        json=payload,
         timeout=timeout,
     )
     response.raise_for_status()

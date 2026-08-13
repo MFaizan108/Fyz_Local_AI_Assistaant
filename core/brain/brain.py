@@ -12,7 +12,7 @@ _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 def get_intent(user_text: str, context: Optional[ConversationContext] = None) -> Intent:
     history = context.recent_messages() if context else None
-    reply = chat(user_text, system=SYSTEM_PROMPT, history=history)
+    reply = chat(user_text, system=SYSTEM_PROMPT, history=history, json_mode=True)
 
     match = _JSON_BLOCK_RE.search(reply)
     if not match:

@@ -1,13 +1,17 @@
 import re
 from dataclasses import dataclass
-from typing import Callable, Optional
+from pathlib import Path
+from typing import Callable, Optional, Tuple
 
 from core.brain.context import ConversationContext
 from core.brain.schemas import Intent
 from core.permissions.levels import PermissionLevel
 from memory.long_term import MemoryCategory, save_memory, search_memories
 from tools.app_control.apps import open_app, open_path_in_vscode
-from tools.project_tools.registry import find_project
+from tools.file_manager.files import delete_file, read_file, search_files
+from tools.project_tools.dev_tools import git_status, run_tests
+from tools.project_tools.registry import Project, find_project
+from tools.system_tools.process import kill_process, list_processes
 from tools.system_tools.screenshot import take_screenshot
 from tools.system_tools.system_info import get_system_info
 
@@ -24,20 +28,17 @@ class ToolEntry:
     description: str
 
 
-def _handle_open_app(intent: Intent, context: Optional[ConversationContext]) -> str:
-    if not intent.target:
-        return "Which app should I open?"
-    return open_app(intent.target)
-
-
-def _handle_open_project(intent: Intent, context: Optional[ConversationContext]) -> str:
-    hint = intent.target
-
+def _resolve_project(
+    hint: Optional[str], context: Optional[ConversationContext]
+) -> Tuple[Optional[Project], Optional[str]]:
+    """Shared by every intent that operates on 'a project' (open/git-status/
+    run-tests): falls back to context.last_project when there's no hint, or
+    when the hint is purely a pronoun reference find_project couldn't match."""
     if not hint and context and context.last_project:
         hint = context.last_project
 
     if not hint:
-        return "Which project do you mean?"
+        return None, None
 
     project = find_project(hint)
 
@@ -46,6 +47,19 @@ def _handle_open_project(intent: Intent, context: Optional[ConversationContext])
         if hint_words and hint_words <= _PRONOUN_WORDS:
             project = find_project(context.last_project)
 
+    return project, hint
+
+
+def _handle_open_app(intent: Intent, context: Optional[ConversationContext]) -> str:
+    if not intent.target:
+        return "Which app should I open?"
+    return open_app(intent.target)
+
+
+def _handle_open_project(intent: Intent, context: Optional[ConversationContext]) -> str:
+    project, hint = _resolve_project(intent.target, context)
+    if not hint:
+        return "Which project do you mean?"
     if project is None:
         return f"I couldn't find a project matching '{hint}'."
 
@@ -54,6 +68,32 @@ def _handle_open_project(intent: Intent, context: Optional[ConversationContext])
 
     open_path_in_vscode(project.path)
     return f"Opening {project.name} in VS Code."
+
+
+def _handle_git_status(intent: Intent, context: Optional[ConversationContext]) -> str:
+    project, hint = _resolve_project(intent.target, context)
+    if not hint:
+        return "Which project's git status do you want?"
+    if project is None:
+        return f"I couldn't find a project matching '{hint}'."
+
+    if context:
+        context.last_project = project.name
+
+    return git_status(project.path)
+
+
+def _handle_run_tests(intent: Intent, context: Optional[ConversationContext]) -> str:
+    project, hint = _resolve_project(intent.target, context)
+    if not hint:
+        return "Which project should I run tests in?"
+    if project is None:
+        return f"I couldn't find a project matching '{hint}'."
+
+    if context:
+        context.last_project = project.name
+
+    return run_tests(project.path)
 
 
 def _handle_get_system_info(intent: Intent, context: Optional[ConversationContext]) -> str:
@@ -87,6 +127,52 @@ def _handle_recall(intent: Intent, context: Optional[ConversationContext]) -> st
     return "Yeh yaad hai:\n" + "\n".join(lines)
 
 
+def _handle_search_files(intent: Intent, context: Optional[ConversationContext]) -> str:
+    if not intent.target:
+        return "What file are you looking for?"
+
+    root = (intent.params or {}).get("root")
+    results = search_files(intent.target, root)
+    if not results:
+        return f"No files found matching '{intent.target}'."
+
+    return "Found:\n" + "\n".join(results)
+
+
+def _handle_read_file(intent: Intent, context: Optional[ConversationContext]) -> str:
+    if not intent.target:
+        return "Which file should I read?"
+
+    target = intent.target
+    if not Path(target).is_file():
+        matches = search_files(target)
+        if not matches:
+            return f"Couldn't find a file matching '{target}'."
+        target = matches[0]
+
+    return read_file(target)
+
+
+def _handle_delete_file(intent: Intent, context: Optional[ConversationContext]) -> str:
+    if not intent.target:
+        return "Which file should I delete?"
+
+    if not Path(intent.target).is_file():
+        return f"'{intent.target}' doesn't look like an existing file path - give me the full path to be safe."
+
+    return delete_file(intent.target)
+
+
+def _handle_list_processes(intent: Intent, context: Optional[ConversationContext]) -> str:
+    return list_processes()
+
+
+def _handle_kill_process(intent: Intent, context: Optional[ConversationContext]) -> str:
+    if not intent.target:
+        return "Which process should I kill?"
+    return kill_process(intent.target)
+
+
 TOOL_REGISTRY: dict[str, ToolEntry] = {
     "open_app": ToolEntry(_handle_open_app, PermissionLevel.SAFE, "Open an application"),
     "open_project": ToolEntry(_handle_open_project, PermissionLevel.SAFE, "Open a known project"),
@@ -94,6 +180,13 @@ TOOL_REGISTRY: dict[str, ToolEntry] = {
     "take_screenshot": ToolEntry(_handle_take_screenshot, PermissionLevel.SAFE, "Take a screenshot"),
     "remember": ToolEntry(_handle_remember, PermissionLevel.CONFIRM, "Save something to long-term memory"),
     "recall": ToolEntry(_handle_recall, PermissionLevel.SAFE, "Recall something from long-term memory"),
+    "search_files": ToolEntry(_handle_search_files, PermissionLevel.SAFE, "Search for a file by name"),
+    "read_file": ToolEntry(_handle_read_file, PermissionLevel.SAFE, "Read a file's contents"),
+    "delete_file": ToolEntry(_handle_delete_file, PermissionLevel.DANGEROUS, "Permanently delete a file"),
+    "list_processes": ToolEntry(_handle_list_processes, PermissionLevel.SAFE, "List running processes"),
+    "kill_process": ToolEntry(_handle_kill_process, PermissionLevel.DANGEROUS, "Force-kill a running process"),
+    "git_status": ToolEntry(_handle_git_status, PermissionLevel.SAFE, "Show git status for a project"),
+    "run_tests": ToolEntry(_handle_run_tests, PermissionLevel.SAFE, "Run a project's test suite"),
 }
 
 
