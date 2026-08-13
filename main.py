@@ -1,3 +1,4 @@
+from core.action_executor.router import route
 from core.brain.brain import get_intent
 
 
@@ -16,7 +17,12 @@ def main() -> None:
             break
 
         intent = get_intent(text)
-        print(f"Fyz(intent): {intent.model_dump_json()}")
+        result = route(intent)
+
+        if result is None:
+            print("Fyz: (just chatting - conversation mode isn't built yet, Phase 4)")
+        else:
+            print(f"Fyz: {result}")
 
 
 if __name__ == "__main__":

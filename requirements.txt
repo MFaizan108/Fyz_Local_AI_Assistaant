@@ -2,3 +2,5 @@ python-dotenv
 httpx
 pydantic
 pytest
+psutil
+Pillow
