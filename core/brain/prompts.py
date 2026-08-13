@@ -15,6 +15,11 @@ proper-noun-looking project names (e.g. "FaizanMart") and descriptive hints abou
 above, prefer open_project over open_app. (target = short hint describing the project)
 - get_system_info: user wants system/laptop status information
 - take_screenshot: user wants a screenshot taken
+- remember: user explicitly wants something saved to long-term memory (e.g. "yaad rakhna", \
+"remember that..."). target = the fact/preference to save, written as a short clear statement. \
+params must include "category", one of: "preference", "decision", "frequent_app", "context"
+- recall: user is asking what Fyz remembers about something (e.g. "tumhe yaad hai...", "what do \
+you remember about..."). target = a short search phrase, or null to recall recent memories in general
 - chat: user is just having a normal conversation, asking a question, or the message isn't a command
 
 If the message is in Urdu, Roman Urdu, or mixed Urdu/English, still classify it correctly - do \
@@ -43,4 +48,10 @@ User: "FaizanMart kholo"
 
 User: "system information batao"
 {"intent": "get_system_info", "target": null, "params": {}}
+
+User: "yaad rakhna mujhe VS Code Chrome se zyada pasand hai"
+{"intent": "remember", "target": "User prefers VS Code over Chrome", "params": {"category": "preference"}}
+
+User: "tumhe yaad hai maine VS Code ke bare mein kya kaha tha?"
+{"intent": "recall", "target": "VS Code", "params": {}}
 """
