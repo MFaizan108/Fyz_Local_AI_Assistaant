@@ -75,6 +75,85 @@ DEFAULT_PROJECTS = [
         "description": "Multi-vendor Django e-commerce platform.",
         "tech_stack": ["Django", "DRF", "Redis", "Elasticsearch"],
     },
+    {
+        "name": "TaskFlow",
+        "aliases": ["taskflow", "project management tool", "task management tool"],
+        "path": r"C:\Users\pakcomp\OneDrive\Desktop\Project Management Tool",
+        "description": (
+            "Full-stack collaborative project management tool (Trello/Asana/Linear-style) - "
+            "Kanban boards, tasks, comments, notifications, activity feeds."
+        ),
+        "tech_stack": ["Django", "DRF", "django-cors-headers"],
+    },
+    {
+        "name": "Social Media Platform",
+        "aliases": ["social media platform", "mini social app", "codealpha mini social app"],
+        "path": r"C:\Users\pakcomp\OneDrive\Desktop\Social Media Platform",
+        "description": "Django social media app with posts, accounts, and media uploads.",
+        "tech_stack": ["Django", "PostgreSQL", "Pillow"],
+    },
+    {
+        "name": "General Store Management System",
+        "aliases": ["gsms", "general store management system", "store management system"],
+        "path": r"C:\Users\pakcomp\OneDrive\Desktop\GSMS_Django_Project\gsms",
+        "description": (
+            "Django-based mini-ERP for a general store: inventory, suppliers/customers, "
+            "purchases/sales, PDF invoicing, a double-entry finance ledger, reports, "
+            "role-based login."
+        ),
+        "tech_stack": ["Django", "ERP", "inventory management"],
+    },
+    {
+        "name": "Midasbuy Automation",
+        "aliases": ["midasbuy", "midasbuy automation", "midasbuy links automation"],
+        "path": r"C:\Users\pakcomp\OneDrive\Desktop\Midasbuy_Automation",
+        "description": "Django + Playwright automation tool for Midasbuy links.",
+        "tech_stack": ["Django", "Playwright", "automation"],
+    },
+    {
+        "name": "Portfolio Website",
+        "aliases": ["portfolio", "my portfolio", "portfolio website"],
+        "path": r"C:\Users\pakcomp\OneDrive\Desktop\portfolio",
+        "description": "Personal Django portfolio website, deployable to Heroku, with a GitHub Pages static export.",
+        "tech_stack": ["Django", "Gunicorn", "Cloudinary"],
+    },
+    {
+        "name": "Flashcard Quiz App",
+        "aliases": ["flashcard", "flashcards", "flashcard quiz", "flashcard quiz app"],
+        "path": r"C:\Users\pakcomp\OneDrive\Desktop\FlashCard",
+        "description": (
+            "Django flashcard study app - flip cards to reveal answers, categorize, "
+            "search/filter, full CRUD."
+        ),
+        "tech_stack": ["Django"],
+    },
+    {
+        "name": "Random Quote Generator",
+        "aliases": ["random quote generator", "quote generator", "codealpha quote generator"],
+        "path": r"C:\Users\pakcomp\OneDrive\Desktop\CodeAlpha\Random_Quote_Generator",
+        "description": "Simple Django random quote generator built during the CodeAlpha internship.",
+        "tech_stack": ["Django"],
+    },
+    {
+        "name": "Birchfields Dental Care Redesign",
+        "aliases": ["birchfields", "birchfields dental", "birchfields dentle care"],
+        "path": r"C:\Users\pakcomp\OneDrive\Desktop\Web_Clients\BirchFields_Dentle_Care",
+        "description": (
+            "Independent, unofficial redesign concept website for Birchfields Family "
+            "Dental Care - static HTML/CSS/JS, no backend."
+        ),
+        "tech_stack": ["HTML", "CSS", "JavaScript"],
+    },
+    {
+        "name": "Church Lane Dental Practice Redesign",
+        "aliases": ["church lane", "church lane dental", "church lane dental practice"],
+        "path": r"C:\Users\pakcomp\OneDrive\Desktop\Web_Clients\Church Lane Dental Practice",
+        "description": (
+            "Independent, unofficial redesign concept website for Church Lane Dental "
+            "Practice - static HTML/CSS/JS, no backend."
+        ),
+        "tech_stack": ["HTML", "CSS", "JavaScript"],
+    },
 ]
 
 
