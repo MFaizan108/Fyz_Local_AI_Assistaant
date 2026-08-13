@@ -9,3 +9,4 @@ numpy
 soundfile
 faster-whisper
 pyttsx3
+PySide6
