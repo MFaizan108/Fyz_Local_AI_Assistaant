@@ -1,4 +1,5 @@
 import threading
+import traceback
 from typing import Callable
 
 import numpy as np
@@ -13,6 +14,7 @@ class UtteranceWorker(QThread):
     thread so the window stays responsive while Fyz is thinking."""
 
     finished_with_reply = Signal(str, str)
+    failed = Signal(str)
 
     def __init__(self, text: str, context: ConversationContext, confirm_prompt: Callable[[str], str], parent=None):
         super().__init__(parent)
@@ -23,7 +25,12 @@ class UtteranceWorker(QThread):
     def run(self) -> None:
         from core.action_executor.dispatch import handle_utterance
 
-        reply = handle_utterance(self.text, self.context, confirm_prompt=self.confirm_prompt)
+        try:
+            reply = handle_utterance(self.text, self.context, confirm_prompt=self.confirm_prompt)
+        except Exception:
+            self.failed.emit(traceback.format_exc(limit=3))
+            return
+
         self.finished_with_reply.emit(self.text, reply)
 
 
@@ -31,6 +38,7 @@ class TranscribeWorker(QThread):
     """Runs faster-whisper transcription off the GUI thread."""
 
     finished_with_text = Signal(str)
+    failed = Signal(str)
 
     def __init__(self, audio: np.ndarray, parent=None):
         super().__init__(parent)
@@ -39,7 +47,12 @@ class TranscribeWorker(QThread):
     def run(self) -> None:
         from voice.stt import transcribe
 
-        text = transcribe(self.audio)
+        try:
+            text = transcribe(self.audio)
+        except Exception:
+            self.failed.emit(traceback.format_exc(limit=3))
+            return
+
         self.finished_with_text.emit(text)
 
 
@@ -50,9 +63,15 @@ class ContinuousListenWorker(QThread):
     utterance (via a threading.Event, since this loop lives on a real OS
     thread outside Qt's signal machinery) until the main thread calls
     resume() - otherwise the mic would still be "listening" while Fyz is
-    speaking its reply out loud, right back into itself."""
+    speaking its reply out loud, right back into itself.
+
+    A failure here (e.g. transcription raising) used to kill the thread
+    silently, leaving the GUI stuck showing "Hamesha sun raha hoon..."
+    forever with no indication anything went wrong - failed surfaces that
+    instead of swallowing it."""
 
     utterance_ready = Signal(str)
+    failed = Signal(str)
 
     def __init__(self, listener: ContinuousListener, parent=None):
         super().__init__(parent)
@@ -66,9 +85,12 @@ class ContinuousListenWorker(QThread):
     def run(self) -> None:
         from voice.stt import transcribe
 
-        for audio in self.listener.listen_for_utterances():
-            text = transcribe(audio).strip()
-            if text:
-                self._resume_event.clear()
-                self.utterance_ready.emit(text)
-                self._resume_event.wait()
+        try:
+            for audio in self.listener.listen_for_utterances():
+                text = transcribe(audio).strip()
+                if text:
+                    self._resume_event.clear()
+                    self.utterance_ready.emit(text)
+                    self._resume_event.wait()
+        except Exception:
+            self.failed.emit(traceback.format_exc(limit=3))

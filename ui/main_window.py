@@ -112,7 +112,20 @@ class MainWindow(QMainWindow):
 
         self.worker = UtteranceWorker(text, self.context, self.confirm_bridge.confirm_prompt)
         self.worker.finished_with_reply.connect(self._on_reply)
+        self.worker.failed.connect(self._on_worker_failed)
         self.worker.start()
+
+    def _on_worker_failed(self, error_text: str) -> None:
+        """A worker thread's failed signal - without this, an exception
+        inside a QThread's run() used to just kill the thread silently,
+        leaving the GUI stuck showing "Thinking..."/"Transcribing..." with
+        no indication anything went wrong."""
+        self._append_chat("Fyz", "Kuch ghalat ho gaya - neeche error hai:")
+        self.chat_log.append(f"<pre>{error_text}</pre>")
+        self._set_busy(False)
+        if self.always_listening and self.listen_worker is not None:
+            self.status_label.setText("● Hamesha sun raha hoon...")
+            self.listen_worker.resume()
 
     def _on_reply(self, user_text: str, reply: str) -> None:
         self._append_chat("Fyz", reply)
@@ -144,6 +157,7 @@ class MainWindow(QMainWindow):
 
             self.transcribe_worker = TranscribeWorker(audio)
             self.transcribe_worker.finished_with_text.connect(self._on_transcribed)
+            self.transcribe_worker.failed.connect(self._on_worker_failed)
             self.transcribe_worker.start()
 
     def _on_transcribed(self, text: str) -> None:
@@ -164,6 +178,7 @@ class MainWindow(QMainWindow):
 
             self.listen_worker = ContinuousListenWorker(self.continuous_listener)
             self.listen_worker.utterance_ready.connect(self._on_continuous_utterance)
+            self.listen_worker.failed.connect(self._on_listen_worker_failed)
             self.listen_worker.start()
         else:
             self._stop_always_listening()
@@ -173,6 +188,18 @@ class MainWindow(QMainWindow):
         self.continuous_listener.stop()
         if self.listen_worker is not None:
             self.listen_worker.resume()
+        self.mic_button.setText("\U0001F3A4")
+        self.mic_button.setToolTip("Click to start always-listening mode (Jarvis-style)")
+        self.push_to_talk_checkbox.setEnabled(True)
+        self._set_busy(False)
+
+    def _on_listen_worker_failed(self, error_text: str) -> None:
+        """The listen loop itself died (not just one turn's processing) -
+        always-listening mode is no longer running, so reset state fully
+        rather than just resuming."""
+        self._append_chat("Fyz", "Hamesha-sunna mode mein error aa gaya, ruk gaya hai:")
+        self.chat_log.append(f"<pre>{error_text}</pre>")
+        self.always_listening = False
         self.mic_button.setText("\U0001F3A4")
         self.mic_button.setToolTip("Click to start always-listening mode (Jarvis-style)")
         self.push_to_talk_checkbox.setEnabled(True)
