@@ -2,7 +2,7 @@ from typing import List, Optional
 
 import httpx
 
-from core.config import EMBED_MODEL, OLLAMA_HOST, OLLAMA_MODEL
+from core.config import EMBED_MODEL, OLLAMA_HOST, OLLAMA_KEEP_ALIVE, OLLAMA_MODEL
 
 
 def chat(
@@ -10,7 +10,7 @@ def chat(
     system: Optional[str] = None,
     history: Optional[List[dict]] = None,
     model: str = OLLAMA_MODEL,
-    timeout: float = 60.0,
+    timeout: float = 180.0,
     json_mode: bool = False,
 ) -> str:
     messages = []
@@ -24,6 +24,7 @@ def chat(
         "model": model,
         "messages": messages,
         "stream": False,
+        "keep_alive": OLLAMA_KEEP_ALIVE,
     }
     if json_mode:
         # Grammar-constrains the output to valid JSON. Needed because plain

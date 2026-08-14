@@ -5,12 +5,13 @@ from typing import Iterator, Optional
 import numpy as np
 import sounddevice as sd
 
+from core.config import VAD_ENERGY_THRESHOLD
 from voice.recorder import SAMPLE_RATE
 
 CHUNK_MS = 100
 SILENCE_DURATION_S = 1.2
 MIN_SPEECH_DURATION_S = 0.3
-ENERGY_THRESHOLD = 0.015
+ENERGY_THRESHOLD = VAD_ENERGY_THRESHOLD
 
 _EXIT_WORD_SETS = [{"exit"}, {"quit"}, {"band", "karo"}, {"bye"}, {"stop"}, {"ruk", "jao"}]
 
@@ -25,6 +26,37 @@ def is_exit_phrase(text: str) -> bool:
 
 def _rms(chunk: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(chunk)))) if chunk.size else 0.0
+
+
+def print_mic_check(duration_s: float = 12.0, sample_rate: int = SAMPLE_RATE) -> None:
+    """Diagnostic: prints the mic device sounddevice will actually use, then
+    live RMS energy levels for `duration_s` seconds so you can see whether
+    the mic is picking up your voice at all, and what VAD_ENERGY_THRESHOLD
+    should be. Run this before assuming always-listening mode is broken -
+    if the numbers never move while you talk, it's a device/OS-permission
+    issue, not a Fyz bug; if they move but never cross the threshold line,
+    lower VAD_ENERGY_THRESHOLD in .env to just under your speaking level."""
+    try:
+        device_info = sd.query_devices(kind="input")
+        print(f"Default input device: {device_info['name']!r}")
+    except Exception as e:
+        print(f"Couldn't query the default input device: {e}")
+
+    chunk_samples = int(sample_rate * CHUNK_MS / 1000)
+    print(f"Current VAD_ENERGY_THRESHOLD = {ENERGY_THRESHOLD}")
+    print(f"Bolo, {duration_s:.0f}s tak live energy level dikhega (Ctrl+C to stop early):")
+
+    start = time.monotonic()
+    try:
+        with sd.InputStream(samplerate=sample_rate, channels=1, dtype="float32") as stream:
+            while time.monotonic() - start < duration_s:
+                chunk, _ = stream.read(chunk_samples)
+                energy = _rms(chunk.flatten())
+                bar = "#" * min(int(energy * 500), 50)
+                marker = "  <-- ABOVE THRESHOLD (would trigger)" if energy >= ENERGY_THRESHOLD else ""
+                print(f"{energy:.4f}  {bar}{marker}")
+    except KeyboardInterrupt:
+        pass
 
 
 class ContinuousListener:
