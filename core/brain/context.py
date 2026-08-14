@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from core.brain.output_validator import has_unexpected_script
+
 
 @dataclass
 class ConversationContext:
@@ -22,4 +24,13 @@ class ConversationContext:
         self.history = self.history[-(self.max_turns * 2):]
 
     def recent_messages(self) -> List[dict]:
-        return list(self.history)
+        """Recent turns, with any assistant turn that somehow ended up
+        containing an unexpected script (e.g. a corrupted reply that slipped
+        past validation) excluded - corrupted output must never get fed back
+        into the model as context, since that risks reinforcing the same
+        drift on the next turn. Nothing is deleted from `self.history`
+        itself, only filtered out of what gets sent to the model."""
+        return [
+            m for m in self.history
+            if not (m["role"] == "assistant" and has_unexpected_script(m["content"]))
+        ]

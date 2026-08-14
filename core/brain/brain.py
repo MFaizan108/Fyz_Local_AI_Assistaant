@@ -12,7 +12,10 @@ _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 def get_intent(user_text: str, context: Optional[ConversationContext] = None) -> Intent:
     history = context.recent_messages() if context else None
-    reply = chat(user_text, system=SYSTEM_PROMPT, history=history, json_mode=True)
+    # A multi_step_task's JSON can run longer than a single-intent object
+    # (one nested {"intent","target","params"} dict per step), so this gets
+    # more headroom than the conversational reply's default num_predict.
+    reply = chat(user_text, system=SYSTEM_PROMPT, history=history, json_mode=True, num_predict=350)
 
     match = _JSON_BLOCK_RE.search(reply)
     if not match:

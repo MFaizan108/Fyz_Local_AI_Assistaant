@@ -4,7 +4,7 @@ JSON object describing their intent. Do not add prose, explanation, or markdown 
 - output raw JSON only.
 
 Schema:
-{"intent": "<snake_case_intent_name>", "target": "<string or null>", "params": {<extra key-values, or empty object>}}
+{"intent": "<snake_case_intent_name>", "target": "<string or null>", "params": {<extra key-values, or empty object>}, "steps": <null, or a list of {"intent", "target", "params"} objects - only for multi_step_task, see below>}
 
 Known intents:
 - open_app: user wants to open a generic system application, one of: chrome, vscode, code, \
@@ -12,7 +12,13 @@ explorer, notepad (target = that app name)
 - open_project: user wants to open one of THEIR OWN named projects/codebases - this includes \
 proper-noun-looking project names (e.g. "FaizanMart") and descriptive hints about a project \
 (e.g. "the one with Ollama in it"). If the target isn't a generic system app from the list \
-above, prefer open_project over open_app. (target = short hint describing the project)
+above, prefer open_project over open_app. (target = short hint describing the project) \
+IMPORTANT disambiguation: if the message explicitly names one of the generic apps above \
+(chrome/vscode/code/explorer/notepad) as the thing to open, always classify it as open_app with \
+that app name as target - even if a person's name or other qualifier appears nearby (e.g. "open \
+the Chrome profile of Faizan", "open Ali's VS Code"). That qualifier describes HOW to open the \
+app, not a project name - only use open_project when the message is actually about one of \
+Faizan's own project codebases.
 - get_system_info: user wants system/laptop status information
 - take_screenshot: user wants a screenshot taken
 - remember: user explicitly wants something saved to long-term memory (e.g. "yaad rakhna", \
@@ -38,6 +44,14 @@ target = a short description of what to change, params must include "file" = the
 to change, relative to the Fyz project root (e.g. "tools/file_manager/files.py"). This never \
 directly edits anything - it only proposes a change in an isolated experiment for review, so use it \
 whenever the user asks Fyz to modify, fix, or improve part of its own source code.
+- multi_step_task: user's message clearly contains TWO OR MORE distinct actions/requests in one \
+go (e.g. "chrome kholo aur weather dekho", "open X and also do Y"). Only use this when there are \
+genuinely multiple separate things being asked - a single action is never multi_step_task. When \
+used: "target" = null, "params" = {}, and "steps" = a list of individual intent objects, each \
+shaped like a normal intent ({"intent", "target", "params"}), using ONLY the known intent names \
+above - EXCEPT for a web search request, which has no execution tool yet but should still be \
+included as a step with intent "search_web" so the user is told that part isn't supported yet, \
+rather than the whole request being silently dropped.
 - chat: user is just having a normal conversation, asking a question, or the message isn't a command
 
 If the message is in Urdu, Roman Urdu, or mixed Urdu/English, still classify it correctly - do \
@@ -104,4 +118,10 @@ User: "iske tests chalao"
 
 User: "tools/file_manager/files.py mein error handling improve karo"
 {"intent": "propose_improvement", "target": "improve error handling", "params": {"file": "tools/file_manager/files.py"}}
+
+User: "chrome kholo aur aaj ka weather dekhna hai"
+{"intent": "multi_step_task", "target": null, "params": {}, "steps": [{"intent": "open_app", "target": "chrome", "params": {}}, {"intent": "search_web", "target": "today's weather", "params": {}}]}
+
+User: "please open the Chrome profile of Faizan and search today's weather"
+{"intent": "multi_step_task", "target": null, "params": {}, "steps": [{"intent": "open_app", "target": "chrome", "params": {}}, {"intent": "search_web", "target": "today's weather", "params": {}}]}
 """

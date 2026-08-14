@@ -12,6 +12,15 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 # next message that can exceed the client timeout entirely. 30m keeps it warm
 # through a normal session.
 OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
+# Generation stability: no temperature/num_predict were ever set before,
+# meaning Ollama used the model's own (fairly high) default sampling - a
+# contributing factor to replies occasionally drifting into an unrelated
+# script (Devanagari/CJK/etc.) on longer generations. 0.6 keeps replies
+# consistent without making them robotic/repetitive; num_predict caps reply
+# length, which both matches the "short and natural" persona and reduces how
+# much room a generation has to drift before it's cut off.
+OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.6"))
+OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "220"))
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "ur")

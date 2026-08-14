@@ -2,7 +2,14 @@ from typing import List, Optional
 
 import httpx
 
-from core.config import EMBED_MODEL, OLLAMA_HOST, OLLAMA_KEEP_ALIVE, OLLAMA_MODEL
+from core.config import (
+    EMBED_MODEL,
+    OLLAMA_HOST,
+    OLLAMA_KEEP_ALIVE,
+    OLLAMA_MODEL,
+    OLLAMA_NUM_PREDICT,
+    OLLAMA_TEMPERATURE,
+)
 
 
 def chat(
@@ -12,6 +19,8 @@ def chat(
     model: str = OLLAMA_MODEL,
     timeout: float = 180.0,
     json_mode: bool = False,
+    temperature: float = OLLAMA_TEMPERATURE,
+    num_predict: int = OLLAMA_NUM_PREDICT,
 ) -> str:
     messages = []
     if system:
@@ -25,6 +34,7 @@ def chat(
         "messages": messages,
         "stream": False,
         "keep_alive": OLLAMA_KEEP_ALIVE,
+        "options": {"temperature": temperature, "num_predict": num_predict},
     }
     if json_mode:
         # Grammar-constrains the output to valid JSON. Needed because plain
