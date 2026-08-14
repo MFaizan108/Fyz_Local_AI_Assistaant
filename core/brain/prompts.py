@@ -14,12 +14,28 @@ proper-noun-looking project names (e.g. "FaizanMart") and descriptive hints abou
 (e.g. "the one with Ollama in it"). If the target isn't a generic system app from the list \
 above, prefer open_project over open_app. (target = short hint describing the project) \
 IMPORTANT disambiguation: if the message explicitly names one of the generic apps above \
-(chrome/vscode/code/explorer/notepad) as the thing to open, always classify it as open_app with \
-that app name as target - even if a person's name or other qualifier appears nearby (e.g. "open \
-the Chrome profile of Faizan", "open Ali's VS Code"). That qualifier describes HOW to open the \
-app, not a project name - only use open_project when the message is actually about one of \
-Faizan's own project codebases.
-- get_system_info: user wants system/laptop status information
+(chrome/vscode/code/explorer/notepad) as the thing to open, classify it as open_app with that app \
+name as target - even if a person's name or other qualifier appears nearby (e.g. "open Ali's VS \
+Code") - that qualifier describes HOW to open the app, not a project name. EXCEPTION: if the \
+qualifier is specifically a browser PROFILE (the word "profile" appears, e.g. "open the Chrome \
+profile of Faizan"), use open_browser instead, not open_app - see below. Only use open_project \
+when the message is actually about one of Faizan's own project codebases.
+- open_browser: user wants to open a browser, specifically naming a profile/account to use (e.g. \
+"Chrome kholo aur Faizan profile open karo", "Faizan profile kholo"). target = the browser name \
+("chrome"), params must include "profile" = the profile name/hint mentioned. If no profile is \
+mentioned at all, this is just open_app, not open_browser - only use open_browser when a profile \
+is explicitly named. This opens the browser directly into that profile in ONE action - never split \
+"open browser" and "open profile" into two separate steps/intents, that would open two windows.
+- project_info: user is asking what a SPECIFIC known project does/is about (e.g. "healthcare \
+project kya karta hai?", "FaizanMart kya hai?") - target = project hint. Different from \
+open_project (which opens it) and current_project_query (which project is active right now).
+- current_project_query: user is asking which project they're CURRENTLY working on or discussed \
+most recently, without naming a specific one (e.g. "main kis project par kaam kar raha hoon?", \
+"hamara latest project konsa hai?", "abhi kis project par hoon"). target = null, params = {}.
+- get_system_info: user explicitly wants the LAPTOP's own technical status (RAM, CPU, disk, \
+battery, etc. - e.g. "system information batao", "kitni RAM use ho rahi hai"). This is NEVER a \
+casual "how are you" / "kya haal hai" greeting about Fyz or the user themselves - that is always \
+chat, even though both are "status" questions in a loose sense.
 - take_screenshot: user wants a screenshot taken
 - remember: user explicitly wants something saved to long-term memory (e.g. "yaad rakhna", \
 "remember that..."). target = the fact/preference to save, written as a short clear statement. \
@@ -39,11 +55,14 @@ e.g. "chrome.exe", or a PID) - this is destructive
 to mean the project just discussed)
 - run_tests: user wants to run the test suite for one of their projects (target = project hint, or \
 null to mean the project just discussed)
-- propose_improvement: user wants Fyz to change/improve/fix ITS OWN code (not another project) - \
-target = a short description of what to change, params must include "file" = the path of the file \
-to change, relative to the Fyz project root (e.g. "tools/file_manager/files.py"). This never \
-directly edits anything - it only proposes a change in an isolated experiment for review, so use it \
-whenever the user asks Fyz to modify, fix, or improve part of its own source code.
+- propose_improvement: user wants Fyz to change/improve/fix ITS OWN existing source code (not \
+another project, and NOT a request for a new project idea) - only use this when the user names or \
+clearly implies an actual existing file/behavior of Fyz's own codebase to change. target = a short \
+description of what to change, params must include "file" = the path of the file to change, \
+relative to the Fyz project root (e.g. "tools/file_manager/files.py"). This never directly edits \
+anything - it only proposes a change in an isolated experiment for review. Do NOT use this for a \
+request to brainstorm/suggest a NEW project idea (e.g. "give me a project idea", "koi project \
+suggest karo") - that is just chat, since nothing about Fyz's own code is being changed.
 - multi_step_task: user's message clearly contains TWO OR MORE distinct actions/requests in one \
 go (e.g. "chrome kholo aur weather dekho", "open X and also do Y"). Only use this when there are \
 genuinely multiple separate things being asked - a single action is never multi_step_task. When \
@@ -119,9 +138,30 @@ User: "iske tests chalao"
 User: "tools/file_manager/files.py mein error handling improve karo"
 {"intent": "propose_improvement", "target": "improve error handling", "params": {"file": "tools/file_manager/files.py"}}
 
+User: "mujhe ek realistic project idea do"
+{"intent": "chat", "target": null, "params": {}}
+
+User: "mujhay koi realistic life problem k solution k liay project batao"
+{"intent": "chat", "target": null, "params": {}}
+
 User: "chrome kholo aur aaj ka weather dekhna hai"
 {"intent": "multi_step_task", "target": null, "params": {}, "steps": [{"intent": "open_app", "target": "chrome", "params": {}}, {"intent": "search_web", "target": "today's weather", "params": {}}]}
 
+User: "Chrome kholo aur Faizan profile open karo"
+{"intent": "open_browser", "target": "chrome", "params": {"profile": "Faizan"}}
+
+User: "Faizan profile kholo"
+{"intent": "open_browser", "target": "chrome", "params": {"profile": "Faizan"}}
+
 User: "please open the Chrome profile of Faizan and search today's weather"
-{"intent": "multi_step_task", "target": null, "params": {}, "steps": [{"intent": "open_app", "target": "chrome", "params": {}}, {"intent": "search_web", "target": "today's weather", "params": {}}]}
+{"intent": "multi_step_task", "target": null, "params": {}, "steps": [{"intent": "open_browser", "target": "chrome", "params": {"profile": "Faizan"}}, {"intent": "search_web", "target": "today's weather", "params": {}}]}
+
+User: "healthcare project kya karta hai?"
+{"intent": "project_info", "target": "healthcare project", "params": {}}
+
+User: "main kis project par kaam kar raha hoon?"
+{"intent": "current_project_query", "target": null, "params": {}}
+
+User: "hamara latest project konsa hai?"
+{"intent": "current_project_query", "target": null, "params": {}}
 """

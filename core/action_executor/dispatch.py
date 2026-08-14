@@ -7,6 +7,7 @@ from core.brain.conversation import get_chat_reply
 from core.brain.identity import get_identity_reply
 from core.brain.normalize import normalize_text
 from core.brain.schemas import Intent
+from core.brain.user_profile import get_profile_reply
 from core.permissions.levels import PermissionLevel
 from memory.action_log import log_action
 
@@ -54,13 +55,35 @@ def _execute_single_intent(intent: Intent, context: ConversationContext, confirm
     return reply
 
 
+def _collapse_redundant_chrome_steps(steps: list) -> list:
+    """A plain "open Chrome" step alongside an "open_browser" step that
+    already opens Chrome into a specific profile is the same request said
+    twice - despite the prompt explicitly saying not to, the classifier
+    still sometimes splits "Chrome kholo aur Faizan profile open karo" into
+    exactly this pair. Rather than depend entirely on prompting to prevent
+    it, deterministically drop the redundant plain open_app("chrome") step
+    whenever a profile-aware open_browser step is also present, so Chrome
+    never launches twice for one request."""
+    has_profile_step = any(
+        step.get("intent") == "open_browser" and (step.get("params") or {}).get("profile")
+        for step in steps
+    )
+    if not has_profile_step:
+        return steps
+
+    return [
+        step for step in steps
+        if not (step.get("intent") == "open_app" and (step.get("target") or "").strip().lower() == "chrome")
+    ]
+
+
 def _execute_multi_step(intent: Intent, context: ConversationContext, confirm_prompt: ConfirmPrompt) -> str:
     """Runs each step of a multi_step_task through _execute_single_intent in
     order, tracking every step's result so a partially-supported request
     (e.g. "open chrome and search today's weather", where web search has no
     registered tool yet) still executes what it can and clearly reports what
     it couldn't, instead of silently only doing the first thing."""
-    steps = intent.steps or []
+    steps = _collapse_redundant_chrome_steps(intent.steps or [])
     if not steps:
         return "Mujhe is command mein koi clear step samajh nahi aaya."
 
@@ -95,11 +118,11 @@ def handle_utterance(
     actions are auditable too. Shared by the text and voice entrypoints."""
     text = normalize_text(text)
 
-    identity_reply = get_identity_reply(text)
-    if identity_reply is not None:
+    deterministic_reply = get_identity_reply(text) or get_profile_reply(text)
+    if deterministic_reply is not None:
         context.add_user_turn(text)
-        context.add_assistant_turn(identity_reply)
-        return identity_reply
+        context.add_assistant_turn(deterministic_reply)
+        return deterministic_reply
 
     intent = get_intent(text, context)
 

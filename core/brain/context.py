@@ -7,10 +7,14 @@ from core.brain.output_validator import has_unexpected_script
 @dataclass
 class ConversationContext:
     """Short-term memory for the current session: recent chat turns plus a
-    couple of quick-reference slots for pronoun resolution ("iska", "isko")."""
+    small set of structured "active state" slots - which project was last
+    opened/discussed, which browser profile was last opened - used for
+    pronoun/follow-up resolution ("iska", "isko", "iske tests chalao")
+    without relying on the LLM to re-derive it from raw history every turn."""
 
     history: List[dict] = field(default_factory=list)
     last_project: Optional[str] = None
+    active_browser_profile: Optional[str] = None
     max_turns: int = 10
 
     def add_user_turn(self, text: str) -> None:

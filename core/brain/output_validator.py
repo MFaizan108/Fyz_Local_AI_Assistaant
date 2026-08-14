@@ -29,3 +29,54 @@ def has_unexpected_script(text: str) -> bool:
             if start <= cp <= end:
                 return True
     return False
+
+
+# Concrete broken/artificial phrases seen in real production output (Brain
+# v3 bug report) - not grammatically Urdu, just a stiff word-for-word
+# translation pattern the model falls into. Cheap substring check, not a
+# grammar checker - deliberately narrow so it only catches known bad
+# patterns rather than second-guessing normal replies.
+_KNOWN_BAD_PHRASES = (
+    "faida karta ja sakta",
+    "mazboot din hogaya",
+    "mazboot din ho gaya",
+    "aasmaan bana deta",
+    "kis prakar sahayata",
+    "aapki seva mein",
+    # Leaks from the propose_improvement clarification flow into ordinary
+    # conversation (e.g. a project-idea request) - the model occasionally
+    # leads with this before self-correcting into an actual answer. Caught
+    # here so the retry regenerates a clean reply instead of keeping the
+    # confused preamble.
+    "kya improve karna hai",
+)
+
+
+def has_known_bad_phrase(text: str) -> bool:
+    norm = text.lower()
+    return any(p in norm for p in _KNOWN_BAD_PHRASES)
+
+
+def has_excessive_repetition(text: str) -> bool:
+    """True if the same 3-word phrase repeats 3+ times - a cheap signal for
+    a generation that's gotten stuck looping rather than actually
+    replying. Short replies (Fyz's normal case) never trigger this."""
+    words = text.lower().split()
+    if len(words) < 9:
+        return False
+    seen = {}
+    for i in range(len(words) - 2):
+        trigram = " ".join(words[i:i + 3])
+        seen[trigram] = seen.get(trigram, 0) + 1
+        if seen[trigram] >= 3:
+            return True
+    return False
+
+
+def needs_regeneration(text: str) -> bool:
+    """Umbrella check used by the chat pipeline to decide whether a raw
+    reply should be retried: wrong script, a known broken/artificial
+    phrase, or the model looping on itself. Deliberately NOT an attempt at
+    a full grammar/quality checker - lightweight heuristics only, backed by
+    the same one-retry-then-fallback flow either way."""
+    return has_unexpected_script(text) or has_known_bad_phrase(text) or has_excessive_repetition(text)

@@ -7,8 +7,10 @@ from core.brain.context import ConversationContext
 from core.brain.schemas import Intent
 from core.permissions.levels import PermissionLevel
 from core.self_improve.sandbox import SandboxError, cleanup_experiment, merge_experiment, propose_change
+from memory.action_log import recent_actions
 from memory.long_term import MemoryCategory, list_memories, save_memory, semantic_search_memories
 from tools.app_control.apps import open_app, open_path_in_vscode
+from tools.app_control.browser_profiles import open_chrome_profile
 from tools.file_manager.files import delete_file, read_file, search_files
 from tools.project_tools.dev_tools import git_status, run_tests
 from tools.project_tools.registry import Project, find_project
@@ -17,8 +19,8 @@ from tools.system_tools.screenshot import take_screenshot
 from tools.system_tools.system_info import get_system_info
 
 _PRONOUN_WORDS = {
-    "iska", "iski", "isko", "iske", "uska", "uski", "usko", "ye", "yeh",
-    "woh", "wo", "is", "it", "this", "that",
+    "iska", "iski", "isko", "iske", "uska", "uski", "usko", "uske", "ye",
+    "yeh", "woh", "wo", "us", "wala", "wali", "is", "it", "this", "that",
 }
 _YES_WORDS = {"y", "yes", "haan", "han", "ji", "ji haan"}
 
@@ -56,22 +58,27 @@ def _resolve_project(
 
 def _handle_open_app(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     if not intent.target:
-        return "Which app should I open?"
-    return open_app(intent.target)
+        return "Kaunsi app kholni hai bhai?"
+
+    key = intent.target.strip().lower()
+    result = open_app(intent.target)
+    if result.startswith("I don't know how to open"):
+        return f"'{intent.target}' kholna abhi mujhe nahi aata bhai."
+    return f"{key.capitalize()} khol raha hoon bhai 😄"
 
 
 def _handle_open_project(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
     project, hint = _resolve_project(intent.target, context)
     if not hint:
-        return "Which project do you mean?"
+        return "Konsa project kholna hai bhai?"
     if project is None:
-        return f"I couldn't find a project matching '{hint}'."
+        return f"Mujhe '{hint}' naam ka koi project nahi mila."
 
     if context:
         context.last_project = project.name
 
     open_path_in_vscode(project.path)
-    return f"Opening {project.name} in VS Code."
+    return f"Ji bhai, {project.name} khol raha hoon VS Code mein."
 
 
 def _handle_git_status(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
@@ -98,6 +105,65 @@ def _handle_run_tests(intent: Intent, context: Optional[ConversationContext], co
         context.last_project = project.name
 
     return run_tests(project.path)
+
+
+def _handle_project_info(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
+    """"Healthcare project kya karta hai?" etc - answers straight from the
+    project registry's own description/tech_stack fields, never from the
+    LLM guessing, so this can never hallucinate what a project does."""
+    project, hint = _resolve_project(intent.target, context)
+    if not hint:
+        return "Konse project ke bare mein puchna hai bhai?"
+    if project is None:
+        return f"Mujhe '{hint}' naam ka koi project nahi mila."
+
+    if context:
+        context.last_project = project.name
+
+    parts = [project.name]
+    if project.description:
+        parts.append(project.description)
+    if project.tech_stack:
+        parts.append(f"Tech stack: {', '.join(project.tech_stack)}")
+    return " - ".join(parts)
+
+
+def _handle_current_project_query(
+    intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt
+) -> str:
+    """"Main kis project par kaam kar raha hoon?" / "hamara latest project
+    konsa hai?" - uses structured state (context.last_project), falling
+    back to the most recent successfully-opened project in the audit log,
+    never a guess. If neither is known, asks naturally instead of picking
+    one at random."""
+    if context and context.last_project:
+        return f"Abhi tum {context.last_project} par kaam kar rahe ho bhai."
+
+    for action in recent_actions(limit=20):
+        if action.intent == "open_project" and action.executed and action.target:
+            return f"Sabse recent project jo khola tha wo hai: {action.target}."
+
+    return "Bhai tumhare paas kuch projects hain 😄 kis wale ki baat kar rahe ho?"
+
+
+def _handle_open_browser(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
+    """Opens Chrome directly into a specific profile in one step (no
+    separate "open chrome" then "switch profile" actions, which would open
+    two windows) - profile resolution never guesses a directory, it's
+    matched against the real profiles Chrome itself reports."""
+    browser = (intent.target or "chrome").strip().lower()
+    if browser != "chrome":
+        return f"'{browser}' abhi supported nahi hai bhai, sirf Chrome."
+
+    profile_hint = (intent.params or {}).get("profile")
+    if not profile_hint:
+        open_app("chrome")
+        return "Chrome khol raha hoon bhai 😄"
+
+    result = open_chrome_profile(profile_hint)
+    if context and "khol raha hoon" in result:
+        context.active_browser_profile = profile_hint
+    return result
 
 
 def _handle_get_system_info(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
@@ -232,6 +298,11 @@ def _handle_propose_improvement(
 TOOL_REGISTRY: dict[str, ToolEntry] = {
     "open_app": ToolEntry(_handle_open_app, PermissionLevel.SAFE, "Open an application"),
     "open_project": ToolEntry(_handle_open_project, PermissionLevel.SAFE, "Open a known project"),
+    "project_info": ToolEntry(_handle_project_info, PermissionLevel.SAFE, "Describe what a known project does"),
+    "current_project_query": ToolEntry(
+        _handle_current_project_query, PermissionLevel.SAFE, "Answer which project is currently active"
+    ),
+    "open_browser": ToolEntry(_handle_open_browser, PermissionLevel.SAFE, "Open a browser, optionally with a specific profile"),
     "get_system_info": ToolEntry(_handle_get_system_info, PermissionLevel.SAFE, "Report system info"),
     "take_screenshot": ToolEntry(_handle_take_screenshot, PermissionLevel.SAFE, "Take a screenshot"),
     "remember": ToolEntry(_handle_remember, PermissionLevel.CONFIRM, "Save something to long-term memory"),

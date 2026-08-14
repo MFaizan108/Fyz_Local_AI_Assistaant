@@ -12,14 +12,22 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 # next message that can exceed the client timeout entirely. 30m keeps it warm
 # through a normal session.
 OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
-# Generation stability: no temperature/num_predict were ever set before,
-# meaning Ollama used the model's own (fairly high) default sampling - a
-# contributing factor to replies occasionally drifting into an unrelated
-# script (Devanagari/CJK/etc.) on longer generations. 0.6 keeps replies
-# consistent without making them robotic/repetitive; num_predict caps reply
-# length, which both matches the "short and natural" persona and reduces how
-# much room a generation has to drift before it's cut off.
-OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.6"))
+# Generation stability. Brain v3 experimented with 0.6/0.4/0.3/0.2 against
+# the same set of realistic Roman Urdu prompts (greeting, mood exchange,
+# humor, a project-idea request) before picking a default:
+#   - 0.6 and 0.3 both reused an EXISTING registered project name
+#     ("FaizanMart") when asked for a NEW project idea, instead of actually
+#     generating one - a subtle reasoning slip, not a script/grammar issue.
+#   - 0.4 and 0.2 both generated a genuinely new idea each time; 0.2 was the
+#     tightest/cleanest but risks over-fitting to the system prompt's own
+#     few-shot examples (near-verbatim phrasing) over many turns, and cuts
+#     down the natural variation a dost-like persona should have.
+# 0.4 is the chosen default: as stable as 0.2 on the hardest test case
+# (project ideas) without going as low as 0.2 and losing natural variety.
+# Not an exhaustive study (one sample per temperature) - if a future session
+# has time, re-run scratchpad/temp_experiment-style sweeps with more samples
+# per temperature before changing this again.
+OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.4"))
 OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "220"))
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
