@@ -8,11 +8,20 @@ from core.brain.identity import get_identity_reply
 from core.brain.normalize import normalize_text
 from core.brain.schemas import Intent
 from core.brain.user_profile import get_profile_reply
+from core.logging_setup import get_logger
 from core.permissions.levels import PermissionLevel
 from memory.action_log import log_action
 
 _YES_WORDS = {"y", "yes", "haan", "han", "ji", "ji haan"}
 _DANGEROUS_CONFIRM_PHRASE = "confirm"
+
+# Shown to the user instead of any raw exception/traceback - GUI, CLI, and
+# voice mode all use this same message via handle_utterance() rather than
+# each entry point improvising its own (or, worse, printing the traceback
+# itself, which is what used to happen in the GUI's failure path).
+TECHNICAL_FAILURE_REPLY = "Bhai 😅 response thora late ho gaya. Ek dafa dobara bolo."
+
+_logger = get_logger(__name__)
 
 ConfirmPrompt = Callable[[str], str]
 
@@ -124,14 +133,22 @@ def handle_utterance(
         context.add_assistant_turn(deterministic_reply)
         return deterministic_reply
 
-    intent = get_intent(text, context)
+    try:
+        intent = get_intent(text, context)
 
-    if intent.intent == "chat":
-        reply = get_chat_reply(text, context)
-    elif intent.intent == "multi_step_task":
-        reply = _execute_multi_step(intent, context, confirm_prompt)
-    else:
-        reply = _execute_single_intent(intent, context, confirm_prompt)
+        if intent.intent == "chat":
+            reply = get_chat_reply(text, context)
+        elif intent.intent == "multi_step_task":
+            reply = _execute_multi_step(intent, context, confirm_prompt)
+        else:
+            reply = _execute_single_intent(intent, context, confirm_prompt)
+    except Exception:
+        # Anything from here down (Ollama timeout/connection errors, a tool
+        # raising, a parsing bug) must never reach the user as a raw
+        # exception/traceback - logged internally instead, GUI/CLI/voice all
+        # get the same natural fallback reply via this single shared path.
+        _logger.exception("handle_utterance failed for input: %r", text)
+        reply = TECHNICAL_FAILURE_REPLY
 
     context.add_user_turn(text)
     context.add_assistant_turn(reply)

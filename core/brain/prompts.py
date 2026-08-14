@@ -32,6 +32,17 @@ open_project (which opens it) and current_project_query (which project is active
 - current_project_query: user is asking which project they're CURRENTLY working on or discussed \
 most recently, without naming a specific one (e.g. "main kis project par kaam kar raha hoon?", \
 "hamara latest project konsa hai?", "abhi kis project par hoon"). target = null, params = {}.
+- introduce_user: user is asking Fyz to introduce/describe MUHAMMAD FAIZAN (Fyz's own creator) to \
+someone ELSE who is physically with the user right now (e.g. "mere dost ko mere bare mein batao", \
+"abu ko mere projects ke bare mein batao", "mere cousin ko batao main kya karta hoon"). This is NOT \
+the same as the user asking about themselves directly ("mera naam kya hai" is never this intent - \
+that's answered elsewhere, before you're even asked). target = null. params must include: \
+"audience" - one of "friend" (dost), "cousin" (cousin), "father" (abu/walid/father), "generic" (unclear \
+or unspecified who's listening); "focus" - one of "general" (default), "coding" (about programming/\
+backend specifically), "ai_projects" (about AI/ML work specifically), "projects" (about his project \
+list generally); "level" - one of "short", "medium" (default - use this unless the message clearly \
+asks for more or less), "detailed" (ONLY when the user explicitly asks for more detail/tafseel, e.g. \
+"detail se batao").
 - get_system_info: user explicitly wants the LAPTOP's own technical status (RAM, CPU, disk, \
 battery, etc. - e.g. "system information batao", "kitni RAM use ho rahi hai"). This is NEVER a \
 casual "how are you" / "kya haal hai" greeting about Fyz or the user themselves - that is always \
@@ -164,4 +175,19 @@ User: "main kis project par kaam kar raha hoon?"
 
 User: "hamara latest project konsa hai?"
 {"intent": "current_project_query", "target": null, "params": {}}
+
+User: "main apne dost ke paas baitha hoon, usko mere bare mein batao"
+{"intent": "introduce_user", "target": null, "params": {"audience": "friend", "focus": "general", "level": "medium"}}
+
+User: "mera cousin mere paas hai, usko batao main kya karta hoon"
+{"intent": "introduce_user", "target": null, "params": {"audience": "cousin", "focus": "general", "level": "medium"}}
+
+User: "main abu ke paas baitha hoon, unko mere projects ke bare mein batao"
+{"intent": "introduce_user", "target": null, "params": {"audience": "father", "focus": "projects", "level": "medium"}}
+
+User: "mere projects short mein batao"
+{"intent": "introduce_user", "target": null, "params": {"audience": "generic", "focus": "projects", "level": "short"}}
+
+User: "mere bare mein detail se batao"
+{"intent": "introduce_user", "target": null, "params": {"audience": "generic", "focus": "general", "level": "detailed"}}
 """

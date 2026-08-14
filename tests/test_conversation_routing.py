@@ -57,3 +57,22 @@ def test_current_project_query_routes_correctly():
 def test_project_info_request_routes_correctly():
     intent = get_intent("healthcare project kya karta hai?")
     assert intent.intent == "project_info"
+
+
+def test_introduce_to_friend_routes_correctly():
+    intent = get_intent("main apne dost ke paas baitha hoon, usko mere bare mein batao")
+    assert intent.intent == "introduce_user"
+    assert intent.params.get("audience") == "friend"
+
+
+def test_introduce_to_cousin_routes_correctly():
+    intent = get_intent("mera cousin mere paas hai, usko batao main kya karta hoon")
+    assert intent.intent == "introduce_user"
+    assert intent.params.get("audience") == "cousin"
+
+
+def test_introduce_to_father_with_projects_focus_routes_correctly():
+    intent = get_intent("main abu ke paas baitha hoon, unko mere projects ke bare mein batao")
+    assert intent.intent == "introduce_user"
+    assert intent.params.get("audience") == "father"
+    assert intent.params.get("focus") == "projects"

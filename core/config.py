@@ -12,23 +12,40 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 # next message that can exceed the client timeout entirely. 30m keeps it warm
 # through a normal session.
 OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
-# Generation stability. Brain v3 experimented with 0.6/0.4/0.3/0.2 against
-# the same set of realistic Roman Urdu prompts (greeting, mood exchange,
-# humor, a project-idea request) before picking a default:
-#   - 0.6 and 0.3 both reused an EXISTING registered project name
-#     ("FaizanMart") when asked for a NEW project idea, instead of actually
-#     generating one - a subtle reasoning slip, not a script/grammar issue.
-#   - 0.4 and 0.2 both generated a genuinely new idea each time; 0.2 was the
-#     tightest/cleanest but risks over-fitting to the system prompt's own
-#     few-shot examples (near-verbatim phrasing) over many turns, and cuts
-#     down the natural variation a dost-like persona should have.
-# 0.4 is the chosen default: as stable as 0.2 on the hardest test case
-# (project ideas) without going as low as 0.2 and losing natural variety.
-# Not an exhaustive study (one sample per temperature) - if a future session
-# has time, re-run scratchpad/temp_experiment-style sweeps with more samples
-# per temperature before changing this again.
-OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.4"))
+# Generation stability. Brain v3 picked 0.4 from a 1-sample-per-temperature
+# sweep. Brain v3.1 re-tested 0.6/0.4/0.3 against the CURRENT system prompt
+# with 3 samples each on the discriminating case (a "give me a new project
+# idea" request) and got a much clearer, reproducible signal than v3's
+# single-sample result:
+#   - 0.4 reused an EXISTING registered project name ("FaizanMart") in 3/3
+#     runs instead of generating a genuinely new idea - not noise, a
+#     consistent reasoning slip at this temperature with the current prompt.
+#   - 0.6 and 0.3 were both clean (a real new idea) in 3/3 runs each.
+#   - Between those two, 0.3 produced one reply with excessive emoji
+#     ("🚀🚀🚀") on an unrelated prompt - the exact overuse the persona is
+#     explicitly told to avoid - while 0.6 didn't show that failure mode.
+# 0.6 is the chosen default. This supersedes v3's 0.4 choice - the earlier
+# result didn't hold up under a larger, controlled re-test on the same
+# prompt version, which is a useful reminder that a 1-sample sweep is noisy
+# enough to reverse on a proper re-test.
+OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.6"))
 OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "220"))
+# Intent classification only needs a short JSON object, even for a
+# multi-step plan (2-3 steps is realistically ~100-150 tokens) - the old
+# blanket 350 was more headroom than needed and made every command take
+# longer to classify (and therefore more likely to hit a slow/cold-loaded
+# read timeout) for no real benefit. 200 stays comfortably above what a
+# real multi-step plan needs while cutting typical generation time.
+OLLAMA_NUM_PREDICT_INTENT = int(os.getenv("OLLAMA_NUM_PREDICT_INTENT", "200"))
+# Split connect vs read timeout instead of one blanket value: connecting to
+# a local Ollama instance should be near-instant (a slow/failed connect
+# means Ollama isn't running at all, worth failing fast on), while the read
+# timeout has to cover a real cold-model-load + generation, which is the
+# actual slow part. Previously a single 180s covered both, which meant a
+# hung/refused connection took just as long to fail as a legitimate slow
+# generation.
+OLLAMA_CONNECT_TIMEOUT = float(os.getenv("OLLAMA_CONNECT_TIMEOUT", "10"))
+OLLAMA_READ_TIMEOUT = float(os.getenv("OLLAMA_READ_TIMEOUT", "90"))
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "ur")

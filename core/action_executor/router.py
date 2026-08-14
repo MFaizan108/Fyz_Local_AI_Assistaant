@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 from core.brain.context import ConversationContext
+from core.brain.introduction import build_introduction
 from core.brain.schemas import Intent
 from core.permissions.levels import PermissionLevel
 from core.self_improve.sandbox import SandboxError, cleanup_experiment, merge_experiment, propose_change
@@ -144,6 +145,19 @@ def _handle_current_project_query(
             return f"Sabse recent project jo khola tha wo hai: {action.target}."
 
     return "Bhai tumhare paas kuch projects hain 😄 kis wale ki baat kar rahe ho?"
+
+
+def _handle_introduce_user(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
+    """"Mere dost ko mere bare mein batao" etc - built deterministically from
+    centralized profile data + the project registry (build_introduction()),
+    never a fresh LLM generation, so Fyz can never invent facts/projects
+    about Faizan when introducing him to someone else."""
+    params = intent.params or {}
+    return build_introduction(
+        audience=params.get("audience", "generic"),
+        focus=params.get("focus", "general"),
+        level=params.get("level", "medium"),
+    )
 
 
 def _handle_open_browser(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
@@ -303,6 +317,7 @@ TOOL_REGISTRY: dict[str, ToolEntry] = {
         _handle_current_project_query, PermissionLevel.SAFE, "Answer which project is currently active"
     ),
     "open_browser": ToolEntry(_handle_open_browser, PermissionLevel.SAFE, "Open a browser, optionally with a specific profile"),
+    "introduce_user": ToolEntry(_handle_introduce_user, PermissionLevel.SAFE, "Introduce Faizan to someone else in the room"),
     "get_system_info": ToolEntry(_handle_get_system_info, PermissionLevel.SAFE, "Report system info"),
     "take_screenshot": ToolEntry(_handle_take_screenshot, PermissionLevel.SAFE, "Take a screenshot"),
     "remember": ToolEntry(_handle_remember, PermissionLevel.CONFIRM, "Save something to long-term memory"),

@@ -1,6 +1,7 @@
 import sys
 from typing import Optional
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -15,7 +16,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.action_executor.dispatch import TECHNICAL_FAILURE_REPLY
 from core.brain.context import ConversationContext
+from core.logging_setup import get_logger
 from memory.action_log import recent_actions
 from ui.confirm_bridge import ConfirmBridge
 from ui.worker import ContinuousListenWorker, TranscribeWorker, UtteranceWorker
@@ -23,8 +26,17 @@ from voice.recorder import Recorder
 from voice.tts import speak
 from voice.vad_listener import ContinuousListener, is_exit_phrase
 
+_logger = get_logger(__name__)
+
 
 class MainWindow(QMainWindow):
+    # Emitted from the TTS background thread's on_done callback once a
+    # reply has actually finished being spoken - connecting this to a slot
+    # (rather than calling GUI code directly from that thread) is what lets
+    # always-listening mode safely resume listening only after Fyz is
+    # actually done talking, without blocking the GUI thread to wait for it.
+    _tts_finished = Signal()
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("FYZ")
@@ -40,6 +52,7 @@ class MainWindow(QMainWindow):
         self.continuous_listener = ContinuousListener()
         self.listen_worker: Optional[ContinuousListenWorker] = None
         self.always_listening = False
+        self._tts_finished.connect(self._on_tts_finished)
 
         central = QWidget()
         layout = QVBoxLayout(central)
@@ -119,9 +132,10 @@ class MainWindow(QMainWindow):
         """A worker thread's failed signal - without this, an exception
         inside a QThread's run() used to just kill the thread silently,
         leaving the GUI stuck showing "Thinking..."/"Transcribing..." with
-        no indication anything went wrong."""
-        self._append_chat("Fyz", "Kuch ghalat ho gaya - neeche error hai:")
-        self.chat_log.append(f"<pre>{error_text}</pre>")
+        no indication anything went wrong. The raw traceback is logged
+        internally only - it must never be shown as Fyz's own reply."""
+        _logger.error("UtteranceWorker/TranscribeWorker failed:\n%s", error_text)
+        self._append_chat("Fyz", TECHNICAL_FAILURE_REPLY)
         self._set_busy(False)
         if self.always_listening and self.listen_worker is not None:
             self.status_label.setText("● Hamesha sun raha hoon...")
@@ -131,8 +145,21 @@ class MainWindow(QMainWindow):
         self._append_chat("Fyz", reply)
         self._set_busy(False)
         self._refresh_activity()
-        if self.speak_checkbox.isChecked():
-            speak(reply)
+
+        should_speak = self.speak_checkbox.isChecked() and bool(reply.strip())
+        if should_speak:
+            speak(reply, on_done=self._tts_finished.emit)
+            if self.always_listening:
+                self.status_label.setText("● Bol raha hoon...")
+        elif self.always_listening and self.listen_worker is not None:
+            self.status_label.setText("● Hamesha sun raha hoon...")
+            self.listen_worker.resume()
+
+    def _on_tts_finished(self) -> None:
+        """Runs on the GUI thread (queued signal delivery from the TTS
+        worker thread) once a reply has actually finished being spoken -
+        only now is it safe to resume always-listening, otherwise the mic
+        could re-arm while Fyz is still talking and pick up its own voice."""
         if self.always_listening and self.listen_worker is not None:
             self.status_label.setText("● Hamesha sun raha hoon...")
             self.listen_worker.resume()
@@ -196,9 +223,9 @@ class MainWindow(QMainWindow):
     def _on_listen_worker_failed(self, error_text: str) -> None:
         """The listen loop itself died (not just one turn's processing) -
         always-listening mode is no longer running, so reset state fully
-        rather than just resuming."""
-        self._append_chat("Fyz", "Hamesha-sunna mode mein error aa gaya, ruk gaya hai:")
-        self.chat_log.append(f"<pre>{error_text}</pre>")
+        rather than just resuming. Raw error logged internally only."""
+        _logger.error("ContinuousListenWorker failed:\n%s", error_text)
+        self._append_chat("Fyz", "Hamesha-sunna mode mein error aa gaya, ruk gaya hai. Mic button dobara dabao.")
         self.always_listening = False
         self.mic_button.setText("\U0001F3A4")
         self.mic_button.setToolTip("Click to start always-listening mode (Jarvis-style)")

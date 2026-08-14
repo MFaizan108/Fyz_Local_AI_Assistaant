@@ -1,7 +1,9 @@
 import sys
+import threading
 
-from core.action_executor.dispatch import handle_utterance
+from core.action_executor.dispatch import TECHNICAL_FAILURE_REPLY, handle_utterance
 from core.brain.context import ConversationContext
+from core.logging_setup import get_logger
 from voice.recorder import record_until_enter
 from voice.stt import transcribe
 from voice.tts import speak
@@ -11,13 +13,27 @@ from voice.vad_listener import ContinuousListener, is_exit_phrase
 # encode emoji or Urdu script, which Fyz's replies will routinely contain.
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+_logger = get_logger(__name__)
+
+
+def _speak_and_wait(text: str) -> None:
+    """speak() now just enqueues onto a persistent background TTS worker
+    and returns immediately (so the GUI never freezes) - but this CLI loop
+    still needs to wait for speech to actually finish before listening
+    again, otherwise the mic would re-arm mid-sentence and risk hearing
+    Fyz's own voice as new input."""
+    done = threading.Event()
+    speak(text, on_done=done.set)
+    done.wait()
+
 
 def _handle_one_utterance(audio, context: ConversationContext) -> bool:
     """Returns False if the conversation should stop."""
     try:
         text = transcribe(audio).strip()
-    except Exception as e:
-        print(f"Fyz: Sunte waqt error aa gaya - {e}")
+    except Exception:
+        _logger.exception("STT transcription failed")
+        print("Fyz: Sunte waqt error aa gaya, phir try karo.")
         return True
 
     if not text:
@@ -28,16 +44,19 @@ def _handle_one_utterance(audio, context: ConversationContext) -> bool:
     if is_exit_phrase(text):
         reply = "Theek hai bhai, phir milte hain."
         print(f"Fyz: {reply}")
-        speak(reply)
+        _speak_and_wait(reply)
         return False
 
     try:
         reply = handle_utterance(text, context)
-    except Exception as e:
-        reply = f"Kuch ghalat ho gaya, phir try karo - ({e})"
+    except Exception:
+        # handle_utterance() already catches its own internal failures -
+        # this is a last-resort net for anything unexpected outside that.
+        _logger.exception("Unexpected failure handling: %r", text)
+        reply = TECHNICAL_FAILURE_REPLY
 
     print(f"Fyz: {reply}")
-    speak(reply)
+    _speak_and_wait(reply)
     return True
 
 

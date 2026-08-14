@@ -13,6 +13,12 @@ PREFERRED_NAME = "Faizan"
 ROLE = "Primary user"
 RELATIONSHIP = "Fyz's creator aur primary user"
 
+# Used by core/brain/introduction.py to build FYZ's introductions of Faizan
+# to other people - kept here alongside the rest of the user's profile data
+# so it's one place to update, not scattered across templates.
+EDUCATION = "BS Artificial Intelligence student"
+ROLE_FOCUS = ["Backend Developer", "Python Developer", "Django Developer", "AI Enthusiast"]
+
 
 def _normalize(text: str) -> str:
     return " ".join(text.lower().split())
