@@ -13,7 +13,8 @@ database — runs locally.
 
 - **Roman Urdu conversation** — chats like a dost (friend), not a formal assistant.
 - **Voice mode** — always-listening (Jarvis-style, no wake word/button) or push-to-talk,
-  with Urdu speech recognition (faster-whisper) and spoken replies (pyttsx3).
+  with Urdu speech recognition (faster-whisper) and natural Urdu spoken replies (local
+  Piper neural TTS — Fyz still *shows* Roman Urdu on screen, but *speaks* real Urdu).
 - **Desktop GUI** (PySide6) and a plain text CLI, both driven by the same backend.
 - **Project registry** — knows your projects by name/alias; can open them in VS Code,
   run their test suite, or check `git status`, all in natural language.
@@ -57,6 +58,21 @@ Make sure Ollama is running before starting Fyz:
 ollama serve
 ```
 
+### Voice model (Piper Urdu TTS)
+
+Spoken replies use a local Piper neural voice (`ur_PK-fasih-medium`, male, Urdu/Pakistan).
+Model files (~64MB) aren't checked into git — download them once:
+
+```bash
+mkdir voice\models\piper
+curl -L -o voice\models\piper\ur_PK-fasih-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/ur/ur_PK/fasih/medium/ur_PK-fasih-medium.onnx
+curl -L -o voice\models\piper\ur_PK-fasih-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/ur/ur_PK/fasih/medium/ur_PK-fasih-medium.onnx.json
+```
+
+If this step is skipped, Fyz still runs and shows replies in the GUI/CLI as normal —
+it just won't speak (a friendly log message explains why; see `TTS_FALLBACK_TO_PYTTSX3`
+in [Configuration](#configuration) if you want the old English-voice fallback instead).
+
 ## Running Fyz
 
 | Mode | Command | Notes |
@@ -80,6 +96,10 @@ All settings live in `.env` (copy from `.env.example`):
 | `WHISPER_MODEL_SIZE` | `base` | faster-whisper model size (`tiny`/`base`/`small`/...). Larger = more accurate but slower/heavier; make sure the model fully downloads before switching. |
 | `WHISPER_LANGUAGE` | `ur` | Language Whisper is forced to transcribe as. Change only if you'll be speaking mostly English. |
 | `VAD_ENERGY_THRESHOLD` | `0.015` | Mic energy level above which always-listening mode considers you to be talking. Uncalibrated per-machine — run `--mic-check` and tune this if voice mode won't detect you. |
+| `TTS_ENABLED` | `true` | Master switch for spoken replies. |
+| `PIPER_ENABLED` | `true` | Use the local Piper Urdu voice for speech. |
+| `PIPER_VOICE_PATH` / `PIPER_CONFIG_PATH` | `voice/models/piper/ur_PK-fasih-medium.onnx(.json)` | Where the downloaded voice model lives — see [Voice model](#voice-model-piper-urdu-tts) above. |
+| `TTS_FALLBACK_TO_PYTTSX3` | `false` | Opt-in only: fall back to the old English-voice engine if Piper is unavailable, instead of staying silent. |
 
 ## Project layout
 

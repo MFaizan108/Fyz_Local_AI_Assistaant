@@ -23,7 +23,7 @@ from memory.action_log import recent_actions
 from ui.confirm_bridge import ConfirmBridge
 from ui.worker import ContinuousListenWorker, TranscribeWorker, UtteranceWorker
 from voice.recorder import Recorder
-from voice.tts import speak
+from voice.tts import speak, stop_speaking
 from voice.vad_listener import ContinuousListener, is_exit_phrase
 
 _logger = get_logger(__name__)
@@ -245,6 +245,13 @@ class MainWindow(QMainWindow):
         for entry in recent_actions(limit=10):
             mark = "✓" if entry.executed else "✗"
             self.activity_list.addItem(f"{mark} {entry.intent}: {entry.target or ''}")
+
+    def closeEvent(self, event) -> None:
+        """Stop accepting new TTS jobs and interrupt anything currently
+        playing so Fyz doesn't keep talking - or leave the worker thread/
+        audio stream running - after the window is closed."""
+        stop_speaking()
+        super().closeEvent(event)
 
 
 def main() -> None:

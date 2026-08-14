@@ -9,4 +9,5 @@ numpy
 soundfile
 faster-whisper
 pyttsx3
+piper-tts
 PySide6

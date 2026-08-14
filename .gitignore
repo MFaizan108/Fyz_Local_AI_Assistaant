@@ -8,3 +8,4 @@ logs/screenshots/*.png
 .pytest_cache/
 .claude/
 workspace/experiments/*/
+voice/models/

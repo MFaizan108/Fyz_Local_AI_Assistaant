@@ -1,8 +1,11 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
@@ -56,3 +59,32 @@ WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "ur")
 # always-listening mode isn't detecting speech (raise it) or is triggering
 # on background noise (lower it... though usually the fix is to raise it).
 VAD_ENERGY_THRESHOLD = float(os.getenv("VAD_ENERGY_THRESHOLD", "0.015"))
+
+# --- TTS (Brain v3.2: Piper Urdu neural voice) ---------------------------
+# Master switch - lets voice mode/GUI disable spoken replies entirely
+# (e.g. on a machine with no working audio device) without touching the
+# rest of the pipeline.
+TTS_ENABLED = os.getenv("TTS_ENABLED", "true").lower() == "true"
+# Piper gives natural Urdu pronunciation (vs. pyttsx3's English voice
+# reading Roman Urdu phonetically, which was the whole reason for this
+# migration). Model files are ~64MB and kept out of git (voice/models/ is
+# gitignored) - default path assumes the documented download location, but
+# both are overridable since the exact install location is a machine/user
+# choice, not something to hardcode blindly.
+PIPER_ENABLED = os.getenv("PIPER_ENABLED", "true").lower() == "true"
+# `or` (not a getenv default) because .env.example ships these blank -
+# os.getenv would return "" for a blank-but-present var, which is truthy
+# enough to skip the default and break the path.
+PIPER_VOICE_PATH = os.getenv("PIPER_VOICE_PATH") or str(
+    _PROJECT_ROOT / "voice" / "models" / "piper" / "ur_PK-fasih-medium.onnx"
+)
+PIPER_CONFIG_PATH = os.getenv("PIPER_CONFIG_PATH") or str(
+    _PROJECT_ROOT / "voice" / "models" / "piper" / "ur_PK-fasih-medium.onnx.json"
+)
+# Explicit opt-in only: if Piper is unavailable (model missing, synthesis
+# error) the fallback is silence + a logged error, NOT the old pyttsx3
+# English voice - an English voice reading Roman Urdu phonetically is the
+# exact bad experience this migration exists to remove, so it must never
+# come back silently. Someone can still opt into it deliberately (e.g. for
+# a machine where Piper can't run at all) by setting this true.
+TTS_FALLBACK_TO_PYTTSX3 = os.getenv("TTS_FALLBACK_TO_PYTTSX3", "false").lower() == "true"

@@ -6,7 +6,7 @@ from core.brain.context import ConversationContext
 from core.logging_setup import get_logger
 from voice.recorder import record_until_enter
 from voice.stt import transcribe
-from voice.tts import speak
+from voice.tts import speak, stop_speaking
 from voice.vad_listener import ContinuousListener, is_exit_phrase
 
 # Windows consoles default to a legacy codepage (e.g. cp1252) that can't
@@ -78,6 +78,8 @@ def main_always_listening() -> None:
                 listener.stop()
     except KeyboardInterrupt:
         print()
+    finally:
+        stop_speaking()
 
 
 def main_push_to_talk() -> None:
@@ -87,17 +89,20 @@ def main_push_to_talk() -> None:
     print("Fyz voice mode (push-to-talk). Press Enter to start talking, Enter again to stop. Ctrl+C to quit.")
     context = ConversationContext()
 
-    while True:
-        try:
-            input("\n[Press Enter to talk to Fyz] ")
-        except (EOFError, KeyboardInterrupt):
-            print()
-            break
+    try:
+        while True:
+            try:
+                input("\n[Press Enter to talk to Fyz] ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
 
-        print("Listening... press Enter to stop.")
-        audio = record_until_enter()
-        if not _handle_one_utterance(audio, context):
-            break
+            print("Listening... press Enter to stop.")
+            audio = record_until_enter()
+            if not _handle_one_utterance(audio, context):
+                break
+    finally:
+        stop_speaking()
 
 
 def main() -> None:
