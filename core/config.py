@@ -88,3 +88,11 @@ PIPER_CONFIG_PATH = os.getenv("PIPER_CONFIG_PATH") or str(
 # come back silently. Someone can still opt into it deliberately (e.g. for
 # a machine where Piper can't run at all) by setting this true.
 TTS_FALLBACK_TO_PYTTSX3 = os.getenv("TTS_FALLBACK_TO_PYTTSX3", "false").lower() == "true"
+
+# --- Smart file search (Brain v3.3) ---------------------------------------
+# Comma-separated absolute paths. Empty (the default) means "use the
+# built-in defaults" (Desktop/Documents/Downloads/OneDrive Desktop) computed
+# in tools/file_manager/file_index.py - kept configurable per Part 7's
+# requirement without forcing every user to set this just to get sane
+# defaults. Deliberately does NOT default to scanning the whole drive.
+FILE_INDEX_ROOTS = [p.strip() for p in os.getenv("FILE_INDEX_ROOTS", "").split(",") if p.strip()]

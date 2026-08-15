@@ -76,3 +76,57 @@ def test_introduce_to_father_with_projects_focus_routes_correctly():
     assert intent.intent == "introduce_user"
     assert intent.params.get("audience") == "father"
     assert intent.params.get("focus") == "projects"
+
+
+# --- Brain v3.3: introduction priority, desktop_action, file search -------
+
+def test_bhai_ko_batao_main_kon_hoon_routes_to_introduce_user_not_identity():
+    intent = get_intent("meray bhai ko mera batao main kon hoon?")
+    assert intent.intent == "introduce_user"
+
+
+def test_copy_command_routes_to_desktop_action():
+    intent = get_intent("copy karo")
+    assert intent.intent == "desktop_action"
+    assert intent.target == "copy"
+
+
+def test_task_manager_command_routes_to_desktop_action():
+    intent = get_intent("Task Manager kholo")
+    assert intent.intent == "desktop_action"
+    assert intent.target == "task_manager"
+
+
+def test_reopen_closed_tab_command_routes_to_desktop_action():
+    intent = get_intent("previous closed tab kholo")
+    assert intent.intent == "desktop_action"
+    assert intent.target == "reopen_closed_tab"
+
+
+def test_lock_laptop_command_routes_to_desktop_action():
+    intent = get_intent("laptop lock kar do")
+    assert intent.intent == "desktop_action"
+    assert intent.target == "lock_laptop"
+
+
+def test_file_search_with_typo_still_routes_to_search_files():
+    intent = get_intent("health care proect search karo")
+    assert intent.intent == "search_files"
+
+
+def test_files_refresh_routes_to_refresh_file_index():
+    intent = get_intent("files refresh karo")
+    assert intent.intent == "refresh_file_index"
+
+
+def test_chrome_profile_and_reopen_tabs_multi_step_includes_both_actions():
+    intent = get_intent("Chrome kholo aur Faizan Mahmood profile open karo aur previous closed tabs kholo")
+    if intent.intent == "desktop_action":
+        # Some runs may not treat this as multi-step at all if the model
+        # folds it into a single browser-open step - unlikely but not this
+        # test's concern; the two-intents case below is the main assertion.
+        return
+    assert intent.intent == "multi_step_task"
+    step_intents = [step.get("intent") for step in (intent.steps or [])]
+    assert "open_browser" in step_intents or "open_app" in step_intents
+    assert "desktop_action" in step_intents

@@ -12,6 +12,9 @@ from memory.action_log import recent_actions
 from memory.long_term import MemoryCategory, list_memories, save_memory, semantic_search_memories
 from tools.app_control.apps import open_app, open_path_in_vscode
 from tools.app_control.browser_profiles import open_chrome_profile
+from tools.desktop_control.executor import execute_action
+from tools.desktop_control.registry import get_action
+from tools.file_manager.file_index import refresh_file_index, smart_search_files
 from tools.file_manager.files import delete_file, read_file, search_files
 from tools.project_tools.dev_tools import git_status, run_tests
 from tools.project_tools.registry import Project, find_project
@@ -216,15 +219,51 @@ def _handle_recall(intent: Intent, context: Optional[ConversationContext], confi
 
 
 def _handle_search_files(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
+    """Fuzzy/typo-tolerant search over the persistent file/folder index
+    (tools/file_manager/file_index.py) - "healtcare proect" still finds
+    "AI-Powered Healthcare Triage & Appointment System". Falls back to the
+    plain substring walk (search_files) only if the index is empty and
+    can't be built (e.g. configured roots don't exist), so this never goes
+    fully silent."""
     if not intent.target:
-        return "What file are you looking for?"
+        return "Bhai, kaunsi file ya folder dhoondni hai?"
 
-    root = (intent.params or {}).get("root")
-    results = search_files(intent.target, root)
-    if not results:
-        return f"No files found matching '{intent.target}'."
+    matches = smart_search_files(intent.target)
+    if not matches:
+        legacy = search_files(intent.target)
+        if not legacy:
+            return f"Bhai, '{intent.target}' se milta koi file/folder nahi mila."
+        return "Mila:\n" + "\n".join(legacy)
 
-    return "Found:\n" + "\n".join(results)
+    if len(matches) == 1 or matches[0].score - matches[1].score >= 15:
+        best = matches[0]
+        return f"Bhai, mujhe yeh mila: {best.name} ({best.path})."
+
+    options = ", ".join(f"{m.name}" for m in matches[:3])
+    return f"Bhai, {len(matches[:3])} milte-julte mile: {options}. Konsa chahiye?"
+
+
+def _handle_refresh_file_index(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
+    count = refresh_file_index()
+    return f"File index refresh kar diya bhai - {count} items indexed 😄"
+
+
+def _handle_desktop_action(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
+    """Generic dispatcher for every registered Windows/browser shortcut
+    (tools/desktop_control/registry.py) - target must be one of the
+    registered action names. Never lets the LLM's target string execute
+    anything unvalidated: an unrecognized target is refused with a natural
+    reply instead of guessing at a shortcut, and internal action names are
+    never shown to the user."""
+    if not intent.target:
+        return "Bhai, konsa action chalana hai?"
+
+    name = intent.target.strip().lower().replace(" ", "_")
+    if get_action(name) is None:
+        return "Bhai, yeh shortcut abhi mere paas nahi hai."
+
+    result = execute_action(name)
+    return result if result is not None else "Bhai, yeh shortcut abhi mere paas nahi hai."
 
 
 def _handle_read_file(intent: Intent, context: Optional[ConversationContext], confirm_prompt: ConfirmPrompt) -> str:
@@ -322,7 +361,13 @@ TOOL_REGISTRY: dict[str, ToolEntry] = {
     "take_screenshot": ToolEntry(_handle_take_screenshot, PermissionLevel.SAFE, "Take a screenshot"),
     "remember": ToolEntry(_handle_remember, PermissionLevel.CONFIRM, "Save something to long-term memory"),
     "recall": ToolEntry(_handle_recall, PermissionLevel.SAFE, "Recall something from long-term memory"),
-    "search_files": ToolEntry(_handle_search_files, PermissionLevel.SAFE, "Search for a file by name"),
+    "search_files": ToolEntry(_handle_search_files, PermissionLevel.SAFE, "Fuzzy/typo-tolerant search for a file or folder by name"),
+    "refresh_file_index": ToolEntry(_handle_refresh_file_index, PermissionLevel.SAFE, "Rebuild the local file/folder search index"),
+    # Permission for a specific desktop_action is target-aware (looked up
+    # per registered action in dispatch.py's _permission_for(), not this
+    # SAFE default) - this entry only exists so route()/TOOL_REGISTRY has a
+    # handler to call at all; see core/action_executor/dispatch.py.
+    "desktop_action": ToolEntry(_handle_desktop_action, PermissionLevel.SAFE, "Execute a registered Windows/browser keyboard shortcut or desktop action"),
     "read_file": ToolEntry(_handle_read_file, PermissionLevel.SAFE, "Read a file's contents"),
     "delete_file": ToolEntry(_handle_delete_file, PermissionLevel.DANGEROUS, "Permanently delete a file"),
     "list_processes": ToolEntry(_handle_list_processes, PermissionLevel.SAFE, "List running processes"),

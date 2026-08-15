@@ -11,3 +11,6 @@ faster-whisper
 pyttsx3
 piper-tts
 PySide6
+pyautogui
+pywin32
+rapidfuzz

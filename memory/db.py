@@ -56,3 +56,16 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS file_index (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                normalized_name TEXT NOT NULL,
+                path TEXT NOT NULL,
+                type TEXT NOT NULL,
+                modified_time TEXT NOT NULL DEFAULT '',
+                root TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )

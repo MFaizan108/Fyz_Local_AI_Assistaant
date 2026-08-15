@@ -1,16 +1,18 @@
-from typing import Callable
+from typing import Callable, Optional
 
 from core.action_executor.router import get_permission_level, route
 from core.brain.brain import get_intent
 from core.brain.context import ConversationContext
 from core.brain.conversation import get_chat_reply
 from core.brain.identity import get_identity_reply
+from core.brain.introduction import looks_like_introduction_request
 from core.brain.normalize import normalize_text
 from core.brain.schemas import Intent
 from core.brain.user_profile import get_profile_reply
 from core.logging_setup import get_logger
 from core.permissions.levels import PermissionLevel
 from memory.action_log import log_action
+from tools.desktop_control.registry import get_action
 
 _YES_WORDS = {"y", "yes", "haan", "han", "ji", "ji haan"}
 _DANGEROUS_CONFIRM_PHRASE = "confirm"
@@ -26,12 +28,25 @@ _logger = get_logger(__name__)
 ConfirmPrompt = Callable[[str], str]
 
 
+def _permission_for(intent: Intent) -> Optional[PermissionLevel]:
+    """Permission level for an intent - target-aware for desktop_action
+    specifically, since one intent name covers ~25 different registered
+    shortcuts with different risk levels (copy is SAFE, lock_laptop is
+    CONFIRM). Everything else keeps the existing per-intent-name lookup
+    unchanged."""
+    if intent.intent == "desktop_action" and intent.target:
+        action = get_action(intent.target.strip().lower().replace(" ", "_"))
+        if action is not None:
+            return action.permission
+    return get_permission_level(intent.intent)
+
+
 def _execute_single_intent(intent: Intent, context: ConversationContext, confirm_prompt: ConfirmPrompt) -> str:
     """Runs one already-classified, non-chat intent through permission
     gating, the tool router, and the audit log. Shared by a normal single
     command and by each step of a multi_step_task, so a step gets exactly
     the same SAFE/CONFIRM/DANGEROUS treatment a standalone command would."""
-    level = get_permission_level(intent.intent)
+    level = _permission_for(intent)
     executed = True
 
     if level == PermissionLevel.DANGEROUS:
@@ -88,26 +103,28 @@ def _collapse_redundant_chrome_steps(steps: list) -> list:
 
 def _execute_multi_step(intent: Intent, context: ConversationContext, confirm_prompt: ConfirmPrompt) -> str:
     """Runs each step of a multi_step_task through _execute_single_intent in
-    order, tracking every step's result so a partially-supported request
-    (e.g. "open chrome and search today's weather", where web search has no
-    registered tool yet) still executes what it can and clearly reports what
-    it couldn't, instead of silently only doing the first thing."""
+    order, joining their natural replies into one flowing response - never
+    "Step 1 (open_browser): ... Step 2 (reopen_closed_tab): ...", since
+    internal intent/action names are implementation detail, not something
+    Fyz should ever say out loud. A partially-supported request (e.g. "open
+    chrome and search today's weather", where web search has no registered
+    tool yet) still executes what it can; what it couldn't do is reported
+    through that step's own natural reply, not a technical step label."""
     steps = _collapse_redundant_chrome_steps(intent.steps or [])
     if not steps:
         return "Mujhe is command mein koi clear step samajh nahi aaya."
 
     results = []
-    for i, step_data in enumerate(steps, start=1):
+    for step_data in steps:
         try:
             step_intent = Intent(raw_text=intent.raw_text, **step_data)
         except Exception:
-            results.append(f"Step {i}: samajh nahi aaya, skip kar diya.")
+            results.append("Ek step samajh nahi aaya, skip kar diya.")
             continue
 
-        step_reply = _execute_single_intent(step_intent, context, confirm_prompt)
-        results.append(f"Step {i} ({step_intent.intent}): {step_reply}")
+        results.append(_execute_single_intent(step_intent, context, confirm_prompt))
 
-    return "\n".join(results)
+    return " ".join(results)
 
 
 def handle_utterance(
@@ -127,11 +144,22 @@ def handle_utterance(
     actions are auditable too. Shared by the text and voice entrypoints."""
     text = normalize_text(text)
 
-    deterministic_reply = get_identity_reply(text) or get_profile_reply(text)
-    if deterministic_reply is not None:
-        context.add_user_turn(text)
-        context.add_assistant_turn(deterministic_reply)
-        return deterministic_reply
+    # An introduction request (e.g. "meray bhai ko mera batao main kon
+    # hoon?") takes priority over the identity/profile fast paths below,
+    # even when it happens to contain a phrase like "main kon hoon" - those
+    # fast paths match anywhere in the message, so without this check an
+    # introduction request would get hijacked into a plain "who am I"
+    # answer instead of routing to introduce_user. Skipping them here just
+    # means this message falls through to full intent classification
+    # instead of the instant deterministic answer - a genuine standalone
+    # identity question never contains these audience cues, so it's
+    # unaffected.
+    if not looks_like_introduction_request(text):
+        deterministic_reply = get_identity_reply(text) or get_profile_reply(text)
+        if deterministic_reply is not None:
+            context.add_user_turn(text)
+            context.add_assistant_turn(deterministic_reply)
+            return deterministic_reply
 
     try:
         intent = get_intent(text, context)
